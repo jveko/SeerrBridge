@@ -1,5 +1,5 @@
 # =============================================================================
-# Soluify.com  |  Your #1 IT Problem Solver  |  {SeerrBridge v0.3.4}
+# Soluify.com  |  Your #1 IT Problem Solver  |  {SeerrBridge v0.3.5}
 # =============================================================================
 #  __         _
 # (_  _ |   .(_
@@ -852,10 +852,18 @@ def search_on_debrid(movie_title, driver):
             
             # Step 2: Check if any red buttons (RD 100%) exist and verify the title for each
             try:
-                red_buttons_elements = driver.find_elements(By.XPATH, "//button[contains(@class, 'bg-red-900/30')]")
-                logger.info(f"Found {len(red_buttons_elements)} red button(s) (100% RD). Verifying titles before deciding to skip.")
+                # Find all red buttons
+                all_red_buttons_elements = driver.find_elements(By.XPATH, "//button[contains(@class, 'bg-red-900/30')]")
+                
+                # Filter out the buttons that contain "Report" in their text
+                red_buttons_elements = [button for button in all_red_buttons_elements if "Report" not in button.text]
+                
+                # Log the count of filtered red buttons
+                logger.info(f"Found {len(red_buttons_elements)} red button(s) (100% RD) without 'Report'. Verifying titles.")
 
                 for i, red_button_element in enumerate(red_buttons_elements, start=1):
+                    if "Report" in red_button_element.text:
+                        continue
                     logger.info(f"Checking red button {i}...")
 
                     try:
@@ -960,10 +968,18 @@ def search_on_debrid(movie_title, driver):
             
             # Step 7: Check if any red button (RD 100%) exists again before continuing
             try:
-                red_buttons_elements = driver.find_elements(By.XPATH, "//button[contains(@class, 'bg-red-900/30')]")
-                logger.info(f"Found {len(red_buttons_elements)} red button(s) (100% RD). Verifying titles before deciding to skip.")
+                # Find all red buttons
+                all_red_buttons_elements = driver.find_elements(By.XPATH, "//button[contains(@class, 'bg-red-900/30')]")
+                
+                # Filter out the buttons that contain "Report" in their text
+                red_buttons_elements = [button for button in all_red_buttons_elements if "Report" not in button.text]
+                
+                # Log the count of filtered red buttons
+                logger.info(f"Found {len(red_buttons_elements)} red button(s) (100% RD) without 'Report'. Verifying titles.")
 
                 for i, red_button_element in enumerate(red_buttons_elements, start=1):
+                    if "Report" in red_button_element.text:
+                        continue
                     logger.info(f"Checking red button {i}...")
 
                     try:
