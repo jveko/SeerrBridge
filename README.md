@@ -64,9 +64,10 @@ Simply put, I was too lazy to set up all of these other applications (arrs) and 
 
 Before you can run this script, ensure that you have the following prerequisites:
 
-### 1. **Jellyseerr / Overseerr Notifications**
+### 1. **Jellyseerr / Overseerr API & Notifications**
   - SeerrBridge should be running on the same machine that Jellyseerr / Overseerr is running on.
-  - You will navigate to Settings > Notifications > Webhook > Turn it on, and configure as shown below
+  - You will need the API key for your .env file.
+  - For notifications, navigate to Settings > Notifications > Webhook > Turn it on, and configure as shown below
 
      ```bash
      http://localhost:8777/jellyseer-webhook/
@@ -82,12 +83,24 @@ Before you can run this script, ensure that you have the following prerequisites
 
 This is what you want to copy from your local storage and set in your .env:
 
-    {"value":"your_token","expiry":123} | YOUR_CLIENT_ID | YOUR_CLIENT_SECRET | YOUR_REFRESH_TOKEN
+    RD_ACCESS_TOKEN={"value":"your_token","expiry":123}
+    RD_CLIENT_ID=YOUR_CLIENT_ID
+    RD_CLIENT_SECRET=YOUR_CLIENT_SECRET
+    RD_REFRESH_TOKEN=YOUR_REFRESH_TOKEN
 
-### 3. **Python 3.10.11+**
+### 3. **Trakt API / Client ID**
+   - Create a [Trakt.tv](https://Trakt.tv) account. Navigate to Settings > Your API Apps > New Application
+     - You can use https://google.com as the redirect URI
+     - Save the Client ID for your .env file.
+    
+![image](https://github.com/user-attachments/assets/c5eb7dbf-7785-45ca-99fa-7e6341744c9d)
+![image](https://github.com/user-attachments/assets/3bb77fd5-2c8f-4675-a1da-59f0cb9cb178)
+
+
+### 4. **Python 3.10.11+**
    - The bot requires **Python 3.10.11** or higher. You can download Python from [here](https://www.python.org/downloads/).
 
-### 4. **Required Python Libraries**
+### 5. **Required Python Libraries**
    - You can install the required libraries by running:
      ```bash
      pip install -r requirements.txt
