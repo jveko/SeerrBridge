@@ -223,7 +223,7 @@ That's it! Your **SeerrBridge** container should now be up and running. 🚀
 ## 🛤️ Roadmap
 
 - [ ] **Faster Processing**: Implement concurrency to handle multiple requests simultaneously.
-- [ ] **TV Show Support**: Extend functionality to handle TV series and episodes.
+- [x] **TV Show Support**: Extend functionality to handle TV series and episodes.
 - [x] **DMM Token**: Ensure access token permanence/refresh
 - [x] **Jellyseer/Overseer API Integration**: Direct integration with Jellyseer/Overseer API for smoother automation and control.
 - [x] **Title Parsing**: Ensure torrent titles/names are properly matched and handle different languages.
