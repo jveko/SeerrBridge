@@ -223,6 +223,8 @@ That's it! Your **SeerrBridge** container should now be up and running. 🚀
 ## 🛤️ Roadmap
 
 - [ ] **Faster Processing**: Implement concurrency to handle multiple requests simultaneously.
+- [ ] **Login With AllDebrid**: Support for users on AllDebrid.
+- [ ] **Login With TorBox**: Support for users on TorBox.
 - [x] **TV Show Support**: Extend functionality to handle TV series and episodes.
 - [x] **DMM Token**: Ensure access token permanence/refresh
 - [x] **Jellyseer/Overseer API Integration**: Direct integration with Jellyseer/Overseer API for smoother automation and control.
