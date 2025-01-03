@@ -1,5 +1,5 @@
 # =============================================================================
-# Soluify.com  |  Your #1 IT Problem Solver  |  {SeerrBridge v0.4} | TV Show Support!!!
+# Soluify.com  |  Your #1 IT Problem Solver  |  {SeerrBridge v0.4.1} | TV Show Support!!!
 # =============================================================================
 #  __         _
 # (_  _ |   .(_
@@ -133,10 +133,10 @@ class WebhookPayload(BaseModel):
     subject: str
     message: Optional[str] = None
     image: Optional[str] = None
-    media: MediaInfo
-    request: RequestInfo
-    issue: Optional[IssueInfo] = None  # Allow issue to be None
-    comment: Optional[CommentInfo] = None  # Allow comment to be None
+    media: Optional[MediaInfo] = None
+    request: Optional[RequestInfo] = None
+    issue: Optional[IssueInfo] = None
+    comment: Optional[CommentInfo] = None
     extra: List[Dict[str, Any]] = []
 
 def refresh_access_token():
@@ -1466,8 +1466,18 @@ async def jellyseer_webhook(request: Request, background_tasks: BackgroundTasks)
         logger.error(f"Payload validation error: {e}")
         raise HTTPException(status_code=422, detail=str(e))
 
+    # Check if this is a test notification
+    if payload.notification_type == "TEST_NOTIFICATION":
+        logger.success("Test notification received and processed successfully.")
+        return {"status": "success", "message": "Test notification processed successfully."}
+
     # Log the specific event from the payload
     logger.success(f"Received webhook with event: {payload.event}")
+
+    # Ensure media is not None before accessing its attributes
+    if payload.media is None:
+        logger.error("Media information is missing in the payload")
+        raise HTTPException(status_code=400, detail="Media information is missing in the payload")
 
     media_type = payload.media.media_type
     logger.success(f"Received webhook with event: {payload.event} for {media_type.capitalize()}")
@@ -1481,7 +1491,7 @@ async def jellyseer_webhook(request: Request, background_tasks: BackgroundTasks)
     # Log the extracted tmdb_id
     logger.info(f"Extracted tmdbId: {tmdb_id}")
 
-    # Fetch movie details from Trakt using tmdb_id
+    # Fetch media details from Trakt using tmdb_id
     media_details = get_media_details_from_trakt(payload.media.tmdbId, payload.media.media_type)
     if not media_details:
         logger.error(f"Failed to fetch {payload.media.media_type} details from Trakt")
