@@ -221,6 +221,8 @@ docker run -d \
 
 That's it! Your **SeerrBridge** container should now be up and running. 🚀
 
+***IF YOU ARE USING OVERSEERR IN DOCKER AND SEERRBRIDGE IN DOCKER, YOUR WEBHOOK IN OVERSEERR NEEDS TO BE THE DOCKER CONTAINER IP***
+
 ---
 
 ## 🛤️ Roadmap
