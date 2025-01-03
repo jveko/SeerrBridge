@@ -1,5 +1,5 @@
 # =============================================================================
-# Soluify.com  |  Your #1 IT Problem Solver  |  {SeerrBridge v0.3.5}
+# Soluify.com  |  Your #1 IT Problem Solver  |  {SeerrBridge v0.4} | TV Show Support!!!
 # =============================================================================
 #  __         _
 # (_  _ |   .(_
@@ -35,7 +35,6 @@ from deep_translator import GoogleTranslator
 from fuzzywuzzy import fuzz
 from loguru import logger
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-
 
 # Configure loguru
 logger.remove()  # Remove default handler
@@ -191,7 +190,6 @@ def update_env_file():
             else:
                 file.write(line)
 
-
 def check_and_refresh_access_token():
     """Check if the access token is expired or about to expire and refresh it if necessary."""
     global RD_ACCESS_TOKEN
@@ -246,7 +244,6 @@ def login(driver):
         # Log any other unexpected exception
         logger.error(f"An unexpected error occurred during login: {ex}")
 
-
 scheduler = AsyncIOScheduler()
 
 ### Browser Initialization and Persistent Session
@@ -294,7 +291,6 @@ async def initialize_browser():
         options.add_experimental_option("excludeSwitches", ["enable-automation"])
         options.add_experimental_option("useAutomationExtension", False)
         options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36")
-
 
         # Log initialization method
         logger.info("Using WebDriver Manager for dynamic ChromeDriver downloads.")
@@ -361,7 +357,6 @@ async def initialize_browser():
             logger.error(f"Error while interacting with the settings: {ex}")
             logger.error(f"Continuing without TORRENT_FILTER_REGEX")
 
-
         # Navigate to the library section
         logger.info("Navigating to the library section.")
         driver.get("https://debridmediamanager.com/library")
@@ -391,22 +386,22 @@ async def shutdown_browser():
 ### Function to process requests from the queue
 async def process_requests():
     while True:
-        movie_title = await request_queue.get()  # Wait for the next request in the queue
+        movie_title, extra_data = await request_queue.get()  # Wait for the next request in the queue
         logger.info(f"Processing movie request: {movie_title}")
         try:
-            await asyncio.to_thread(search_on_debrid, movie_title, driver)  # Process the request
+            await asyncio.to_thread(search_on_debrid, movie_title, driver, extra_data)  # Process the request
         except Exception as ex:
             logger.critical(f"Error processing movie request {movie_title}: {ex}")
         finally:
             request_queue.task_done()  # Mark the request as done
 
 ### Function to add requests to the queue
-async def add_request_to_queue(movie_title):
+async def add_request_to_queue(movie_title, extra_data=None):
     if request_queue.full():
         logger.warning(f"Request queue is full. Cannot add movie: {movie_title}")
         return False
     
-    await request_queue.put(movie_title)
+    await request_queue.put((movie_title, extra_data))
     logger.info(f"Added movie request to queue: {movie_title}")
     return True
 
@@ -421,7 +416,6 @@ def extract_year(text, ignore_resolution=False):
     if match:
         return int(match.group(0))
     return None
-
 
 # Initialize the inflect engine for number-word conversion
 p = inflect.engine()
@@ -438,7 +432,6 @@ def translate_title(title, target_lang='en'):
     except Exception as e:
         logger.error(f"Error translating title '{title}': {e}")
         return title  # Return the original title if translation fails
-
 
 def clean_title(title, target_lang='en'):
     """
@@ -475,7 +468,6 @@ def normalize_title(title, target_lang='en'):
     # Convert to lowercase
     return normalized_title.lower()
 
-
 def replace_numbers_with_words(title):
     """
     Replaces digits with their word equivalents (e.g., "3" to "three").
@@ -499,7 +491,6 @@ def replace_words_with_numbers(title):
     for word, digit in words_to_numbers.items():
         title = re.sub(rf'\b{word}\b', digit, title, flags=re.IGNORECASE)
     return title
-
 
 # Function to fetch media requests from Overseerr
 def get_overseerr_media_requests() -> list[dict]:
@@ -531,49 +522,49 @@ TRAKT_RATE_LIMIT_PERIOD = 5 * 60  # 5 minutes in seconds
 trakt_api_calls = 0
 last_reset_time = time.time()
 
-def get_movie_details_from_trakt(tmdb_id: str) -> Optional[dict]:
+def get_media_details_from_trakt(tmdb_id: str, media_type: str) -> Optional[dict]:
     global trakt_api_calls, last_reset_time
 
-    # Check if the rate limit period has elapsed
     current_time = time.time()
     if current_time - last_reset_time >= TRAKT_RATE_LIMIT_PERIOD:
         trakt_api_calls = 0
         last_reset_time = current_time
 
-    # Check if we have reached the rate limit
     if trakt_api_calls >= TRAKT_RATE_LIMIT:
         logger.warning("Trakt API rate limit reached. Waiting for the next period.")
         time.sleep(TRAKT_RATE_LIMIT_PERIOD - (current_time - last_reset_time))
         trakt_api_calls = 0
         last_reset_time = time.time()
 
-    url = f"https://api.trakt.tv/search/tmdb/{tmdb_id}?type=movie"
+    # Determine the type based on media_type
+    trakt_type = 'show' if media_type == 'tv' else 'movie'
+    url = f"https://api.trakt.tv/search/tmdb/{tmdb_id}?type={trakt_type}"
     headers = {
         "Content-type": "application/json",
         "trakt-api-key": TRAKT_API_KEY,
         "trakt-api-version": "2"
     }
-    
+
     try:
         response = requests.get(url, headers=headers, timeout=10)
         trakt_api_calls += 1
-        
+
         if response.status_code == 200:
             data = response.json()
             if data and isinstance(data, list) and data:
-                movie_info = data[0]['movie']
+                media_info = data[0][trakt_type]
                 return {
-                    "title": movie_info['title'],
-                    "year": movie_info['year']
+                    "title": media_info['title'],
+                    "year": media_info['year']
                 }
             else:
-                logger.error("Movie details for ID not found in Trakt API response.")
+                logger.error(f"{trakt_type.capitalize()} details for ID not found in Trakt API response.")
                 return None
         else:
             logger.error(f"Trakt API request failed with status code {response.status_code}")
             return None
     except requests.exceptions.RequestException as e:
-        logger.error(f"Error fetching movie details from Trakt API: {e}")
+        logger.error(f"Error fetching {trakt_type} details from Trakt API: {e}")
         return None
 
 ### Process the fetched messages (newest to oldest)
@@ -586,27 +577,37 @@ async def process_movie_requests():
     for request in requests:
         tmdb_id = request['media']['tmdbId']
         media_id = request['media']['id']
-        logger.info(f"Processing request with TMDB ID {tmdb_id} and media ID {media_id}")
-        
-        movie_details = get_movie_details_from_trakt(tmdb_id)
+        media_type = request['media']['mediaType']  # Extract media_type from the request
+        logger.info(f"Processing request with TMDB ID {tmdb_id} and media ID {media_id} (Media Type: {media_type})")
+
+        # Extract requested seasons for TV shows
+        extra_data = []
+        if media_type == 'tv' and 'seasons' in request:
+            requested_seasons = [f"Season {season['seasonNumber']}" for season in request['seasons']]
+            extra_data.append({"name": "Requested Seasons", "value": ", ".join(requested_seasons)})
+            logger.info(f"Requested seasons for TV show: {requested_seasons}")
+
+        # Fetch media details from Trakt
+        movie_details = get_media_details_from_trakt(tmdb_id, media_type)  # Pass media_type here
         if not movie_details:
-            logger.error(f"Failed to get movie details for TMDB ID {tmdb_id}")
+            logger.error(f"Failed to get media details for TMDB ID {tmdb_id}")
             continue
         
-        movie_title = f"{movie_details['title']} ({movie_details['year']})"
-        logger.info(f"Processing movie request: {movie_title}")
+        media_title = f"{movie_details['title']} ({movie_details['year']})"
+        logger.info(f"Processing {media_type} request: {media_title}")
         
         try:
-            confirmation_flag = await asyncio.to_thread(search_on_debrid, movie_title, driver)  # Process the request and get the confirmation flag
+            # Pass media_type and extra_data to search_on_debrid
+            confirmation_flag = await asyncio.to_thread(search_on_debrid, media_title, driver, extra_data)
             if confirmation_flag:
                 if mark_completed(media_id, tmdb_id):
-                    logger.success(f"Marked media {media_id} as completed in overseerr")
+                    logger.success(f"Marked media {media_id} as completed in Overseerr")
                 else:
-                    logger.error(f"Failed to mark media {media_id} as completed in overseerr")
+                    logger.error(f"Failed to mark media {media_id} as completed in Overseerr")
             else:
                 logger.info(f"Media {media_id} was not properly confirmed. Skipping marking as completed.")
         except Exception as ex:
-            logger.critical(f"Error processing movie request {movie_title}: {ex}")
+            logger.critical(f"Error processing {media_type} request {media_title}: {ex}")
 
     logger.info("Finished processing all current requests. Waiting for new requests.")
 
@@ -640,7 +641,6 @@ def mark_completed(media_id: int, tmdb_id: int) -> bool:
     except json.JSONDecodeError as e:
         logger.error(f"Failed to decode JSON response for media {media_id}: {str(e)}")
         return False
-
 
 def prioritize_buttons_in_box(result_box):
     """
@@ -702,7 +702,6 @@ def prioritize_buttons_in_box(result_box):
 
     return False
 
-
 def attempt_button_click_with_state_check(button, result_box):
     """
     Attempts to click a button and waits for its state to change.
@@ -738,12 +737,223 @@ def attempt_button_click_with_state_check(button, result_box):
 
     return False
 
+def parse_requested_seasons(extra_data):
+    """
+    Parse the requested seasons from the extra data in the JSON payload.
+    """
+    if not extra_data:
+        return []
 
+    for item in extra_data:
+        if item['name'] == 'Requested Seasons':
+            return item['value'].split(', ')
+    return []
 
+def normalize_season(season):
+    """
+    Normalize season strings to a consistent format (e.g., "Season 1", "Season 2").
+    Handles formats like "S01", "S1", "Season 1", etc.
+    """
+    season = season.strip().lower()  # Normalize to lowercase
+    if season.startswith('s') and season[1:].isdigit():  # Handle "S01", "S1", etc.
+        season_number = int(season[1:])
+        return f"Season {season_number}"
+    elif season.startswith('season') and season[6:].strip().isdigit():  # Handle "Season 1", "Season 2", etc.
+        season_number = int(season[6:].strip())
+        return f"Season {season_number}"
+    else:
+        # Default to "Season X" if the format is unrecognized
+        return f"Season {season}"
+
+def match_complete_seasons(title, seasons):
+    """
+    Check if the title contains all requested seasons in a complete pack.
+    """
+    title = title.lower()
+    for season in seasons:
+        if f"complete {season.lower()}" not in title and f"complete {season.lower().replace('s', 'season ')}" not in title:
+            return False
+    return True
+
+def match_single_season(title, season):
+    """
+    Check if the title contains the exact requested season.
+    Handles formats like "Season 1", "S01", "S1", etc.
+    """
+    # Normalize the season string for comparison
+    season = season.lower().strip()
+    title = title.lower()
+
+    # Extract the season number from the requested season
+    if season.startswith("season"):
+        season_number = season.replace("season", "").strip()
+    elif season.startswith("s"):
+        season_number = season.replace("s", "").strip()
+    else:
+        season_number = season
+
+    # Ensure the season number is a valid integer
+    try:
+        season_number = int(season_number)
+    except ValueError:
+        logger.warning(f"Invalid season number format: {season}")
+        return False
+
+    # Match "Season X", "SX", or "S0X" in the title
+    # Ensure the season number is exactly the one requested
+    return (
+        f"season {season_number}" in title or
+        f"s{season_number}" in title or
+        f"s{season_number:02d}" in title
+    ) and not any(
+        f"season {other_season}" in title or
+        f"s{other_season}" in title or
+        f"s{other_season:02d}" in title
+        for other_season in range(1, 100) if other_season != season_number
+    )
+
+def extract_season(title):
+    """
+    Extract the season number from a title (e.g., 'naruto.s01.bdrip' → 1).
+    """
+    season_match = re.search(r"[sS](\d{1,2})", title)
+    if season_match:
+        return int(season_match.group(1))
+    return None
+
+def check_red_buttons(driver, movie_title, normalized_seasons, confirmed_seasons, is_tv_show):
+    """
+    Check for red buttons (RD 100%) and verify titles and seasons.
+    """
+    confirmation_flag = False  # Initialize the confirmation flag
+
+    try:
+        # Find all red buttons
+        all_red_buttons_elements = driver.find_elements(By.XPATH, "//button[contains(@class, 'bg-red-900/30')]")
+        
+        # Filter out the buttons that contain "Report" in their text
+        red_buttons_elements = [button for button in all_red_buttons_elements if "Report" not in button.text]
+        
+        # Log the count of filtered red buttons
+        logger.info(f"Found {len(red_buttons_elements)} red button(s) (100% RD) without 'Report'. Verifying titles.")
+
+        # Flag to track if any red button was found for the current season
+        found_red_button_for_season = False
+
+        for i, red_button_element in enumerate(red_buttons_elements, start=1):
+            if "Report" in red_button_element.text:
+                continue
+            logger.info(f"Checking red button {i}...")
+
+            try:
+                # Adjusted XPath to find the <h2> element within the same parent container as the red button
+                red_button_title_element = red_button_element.find_element(By.XPATH, ".//ancestor::div[contains(@class, 'border-2')]//h2")
+                red_button_title_text = red_button_title_element.text.strip()
+
+                # Clean the title for comparison
+                red_button_title_cleaned = clean_title(red_button_title_text.split('(')[0].strip(), target_lang='en')
+                red_button_title_normalized = normalize_title(red_button_title_text.split('(')[0].strip(), target_lang='en')
+
+                # Clean and normalize the movie title once outside the loop
+                movie_title_cleaned = clean_title(movie_title.split('(')[0].strip(), target_lang='en')
+                movie_title_normalized = normalize_title(movie_title.split('(')[0].strip(), target_lang='en')
+
+                logger.info(f"Red button {i} title: {red_button_title_cleaned}, Expected movie title: {movie_title_cleaned}")
+
+                # Extract the year from the red button title, ignoring resolution strings
+                red_button_year = extract_year(red_button_title_text, ignore_resolution=True)
+
+                # Extract the expected year from the provided movie title (if it exists)
+                expected_year = extract_year(movie_title)
+
+                # Use fuzzy matching instead of startswith (also allow partial matching for more relaxed comparisons)
+                title_match_ratio = fuzz.partial_ratio(red_button_title_cleaned.lower(), movie_title_cleaned.lower())
+                title_match_threshold = 75  # You can lower or raise this based on how aggressive you want it to be.
+
+                # Additional title comparison logic with fuzzy matching and threshold
+                title_matched = False
+                if (
+                    title_match_ratio >= title_match_threshold or  # Fuzzy match title (relaxed match)
+                    movie_title_normalized.startswith(red_button_title_normalized)  # Backwards title check
+                ):
+                    # Titles match within boundaries.
+                    title_matched = True  # Consider this a valid match.
+
+                # Skip year comparison for TV shows or if either year is None
+                if is_tv_show or red_button_year is None or expected_year is None:
+                    year_matched = True  # Skip year comparison
+                else:
+                    # Expanded year match check with more leeway (±2 years to avoid overly strict checks)
+                    year_matched = abs(red_button_year - expected_year) <= 2
+
+                # Check if the season matches the requested season (only for TV shows)
+                if is_tv_show and normalized_seasons:
+                    # Extract the season from the red button title
+                    found_season = extract_season(red_button_title_text)
+                    logger.info(f"Found season (raw): {found_season}")
+                    logger.info(f"Requested seasons (normalized): {normalized_seasons}")
+
+                    # Convert found_season to a string (if it's not already)
+                    found_season_str = str(found_season) if found_season is not None else None
+
+                    # Normalize the found season to match the format of normalized_seasons
+                    found_season_normalized = f"Season {found_season_str}" if found_season_str and found_season_str.isdigit() else found_season_str
+                    logger.info(f"Found season (normalized): {found_season_normalized}")
+
+                    # Check if the found season matches any of the requested seasons
+                    if found_season_normalized:
+                        if found_season_normalized in normalized_seasons:
+                            # Check if the season has already been confirmed
+                            if found_season_normalized in confirmed_seasons:
+                                logger.info(f"Season {found_season_normalized} has already been confirmed. Skipping this red button.")
+                                found_red_button_for_season = True
+                                confirmed_seasons.add(found_season_normalized)
+                                return confirmation_flag, confirmed_seasons  # Exit early if already confirmed
+
+                            logger.info(f"Found a matching season {found_season_normalized} in the requested seasons. Proceeding with this red button.")
+                            found_red_button_for_season = True
+                        else:
+                            logger.warning(f"Season mismatch for red button {i}: Found season {found_season_normalized}, but requested seasons are {normalized_seasons}. Skipping.")
+                            continue  # Skip this red button if the season doesn't match
+
+                if title_matched and year_matched:
+                    logger.info(f"Found a match on red button {i} - {red_button_title_cleaned}. Skipping...")
+                    # Handle the RD button selection or matching action here
+                    confirmation_flag = True
+                    # Add the confirmed season to the set
+                    if is_tv_show and found_season_normalized:
+                        confirmed_seasons.add(found_season_normalized)
+                        logger.info(f"Added {found_season_normalized} to confirmed seasons: {confirmed_seasons}")
+                        confirmation_flag = True  # Mark as confirmed match.
+
+                else:
+                    # If no match, continue with the next available RD red button.
+                    logger.warning(f"No match for red button {i}: Title - {red_button_title_cleaned}, Year - {red_button_year}. Moving to next red button.")
+
+            except NoSuchElementException as e:
+                logger.warning(f"Could not find title associated with red button {i}: {e}")
+                continue  # If a title is not found for a red button, continue to the next one
+
+        # If no red buttons were found for the current season, log and continue to the next season
+        if not found_red_button_for_season and is_tv_show and normalized_seasons:
+            logger.info(f"No red buttons found for the current season. Continuing to the next season.")
+
+    except NoSuchElementException:
+        logger.info("No red buttons (100% RD) detected. Proceeding with optional fallback.")
+
+    return confirmation_flag, confirmed_seasons
 
 ### Search Function to Reuse Browser
-def search_on_debrid(movie_title, driver):
+def search_on_debrid(movie_title, driver, extra_data=None):
     logger.info(f"Starting Selenium automation for movie: {movie_title}")
+
+    # Extract requested seasons from the extra data
+    requested_seasons = parse_requested_seasons(extra_data) if extra_data else []
+    normalized_seasons = [normalize_season(season) for season in requested_seasons]
+
+    # Determine if the media is a TV show
+    is_tv_show = any(item['name'] == 'Requested Seasons' for item in extra_data) if extra_data else False
+    logger.info(f"Media type: {'TV Show' if is_tv_show else 'Movie'}")
 
     # Check if the driver is None before proceeding to avoid NoneType errors
     if not driver:
@@ -764,8 +974,8 @@ def search_on_debrid(movie_title, driver):
         logger.success(f"Navigated to search results page for {movie_title}.")
         
         # Wait for the results page to load dynamically
-        WebDriverWait(driver, 15).until(
-            EC.presence_of_element_located((By.XPATH, "//a[contains(@href, '/movie/')]"))
+        WebDriverWait(driver, 30).until(
+            EC.presence_of_element_located((By.XPATH, f"//a[contains(@href, '/movie/') or contains(@href, '/show/')]"))
         )
 
         # Clean and normalize the movie title (remove year in parentheses)
@@ -776,7 +986,7 @@ def search_on_debrid(movie_title, driver):
         # Find the movie result elements
         try:
             movie_elements = WebDriverWait(driver, 10).until(
-                EC.presence_of_all_elements_located((By.XPATH, f"//a[contains(@href, '/movie/')]"))
+                EC.presence_of_all_elements_located((By.XPATH, f"//a[contains(@href, '/movie/') or contains(@href, '/show/')]"))
             )
 
             # Iterate over the movie elements to find the correct one
@@ -850,75 +1060,15 @@ def search_on_debrid(movie_title, driver):
 
             logger.info("Waiting for 'Checking RD availability...' to appear.")
             
+            # Determine if the current URL is for a TV show
+            current_url = driver.current_url
+            is_tv_show = '/show/' in current_url
+            logger.info(f"is_tv_show: {is_tv_show}")
+            # Initialize a set to track confirmed seasons
+            confirmed_seasons = set()
+            
             # Step 2: Check if any red buttons (RD 100%) exist and verify the title for each
-            try:
-                # Find all red buttons
-                all_red_buttons_elements = driver.find_elements(By.XPATH, "//button[contains(@class, 'bg-red-900/30')]")
-                
-                # Filter out the buttons that contain "Report" in their text
-                red_buttons_elements = [button for button in all_red_buttons_elements if "Report" not in button.text]
-                
-                # Log the count of filtered red buttons
-                logger.info(f"Found {len(red_buttons_elements)} red button(s) (100% RD) without 'Report'. Verifying titles.")
-
-                for i, red_button_element in enumerate(red_buttons_elements, start=1):
-                    if "Report" in red_button_element.text:
-                        continue
-                    logger.info(f"Checking red button {i}...")
-
-                    try:
-                        # Adjusted XPath to find the <h2> element within the same parent container as the red button
-                        red_button_title_element = red_button_element.find_element(By.XPATH, ".//ancestor::div[contains(@class, 'border-2')]//h2")
-                        red_button_title_text = red_button_title_element.text.strip()
-
-                        # Clean the title for comparison
-                        red_button_title_cleaned = clean_title(red_button_title_text.split('(')[0].strip(), target_lang='en')
-                        red_button_title_normalized = normalize_title(red_button_title_text.split('(')[0].strip(), target_lang='en')
-
-                        # Clean and normalize the movie title once outside the loop
-                        movie_title_cleaned = clean_title(movie_title.split('(')[0].strip(), target_lang='en')
-                        movie_title_normalized = normalize_title(movie_title.split('(')[0].strip(), target_lang='en')
-
-                        logger.info(f"Red button {i} title: {red_button_title_cleaned}, Expected movie title: {movie_title_cleaned}")
-
-                        # Extract the year from the red button title, ignoring resolution strings
-                        red_button_year = extract_year(red_button_title_text, ignore_resolution=True)
-
-                        # Extract the expected year from the provided movie title (if it exists)
-                        expected_year = extract_year(movie_title)
-
-                        # Use fuzzy matching instead of startswith (also allow partial matching for more relaxed comparisons)
-                        title_match_ratio = fuzz.partial_ratio(red_button_title_cleaned.lower(), movie_title_cleaned.lower())
-                        title_match_threshold = 75  # You can lower or raise this based on how aggressive you want it to be.
-
-                        # Additional title comparison logic with fuzzy matching and threshold
-                        title_matched = False
-                        if (
-                            title_match_ratio >= title_match_threshold or  # Fuzzy match title (relaxed match)
-                            movie_title_normalized.startswith(red_button_title_normalized)  # Backwards title check
-                        ):
-                            # Titles match within boundaries.
-                            title_matched = True  # Consider this a valid match.
-
-                        # Expanded year match check with more leeway (±2 years to avoid overly strict checks)
-                        year_matched = (expected_year is None or abs(red_button_year - expected_year) <= 2)
-
-                        if title_matched and year_matched:
-                            logger.info(f"Found a match on red button {i} - {red_button_title_cleaned}. Skipping...")
-                            # Handle the RD button selection or matching action here
-                            confirmation_flag = True  # Mark as confirmed match.
-                            return confirmation_flag  # Once we click a matching button, we stop further checks.
-
-                        else:
-                            # If no match, continue with the next available RD red button.
-                            logger.warning(f"No match for red button {i}: Title - {red_button_title_cleaned}, Year - {red_button_year}. Moving to next red button.")
-
-                    except NoSuchElementException as e:
-                        logger.warning(f"Could not find title associated with red button {i}: {e}")
-                        continue  # If a title is not found for a red button, continue to the next one
-            except NoSuchElementException:
-                logger.info("No red buttons (100% RD) detected. Proceeding with optional fallback.")
-
+            confirmation_flag, confirmed_seasons = check_red_buttons(driver, movie_title, normalized_seasons, confirmed_seasons, is_tv_show)
 
             # Step 3: Wait for the "Checking RD availability..." message to disappear
             try:
@@ -965,176 +1115,306 @@ def search_on_debrid(movie_title, driver):
                 logger.warning("No torrents found in RD according to status, but checking for Instant RD buttons.")
             else:
                 logger.success(f"{torrents_count} torrents found in RD. Proceeding with RD checks.")
-            
+            # Initialize a set to track confirmed seasons
+            confirmed_seasons = set()
             # Step 7: Check if any red button (RD 100%) exists again before continuing
-            try:
-                # Find all red buttons
-                all_red_buttons_elements = driver.find_elements(By.XPATH, "//button[contains(@class, 'bg-red-900/30')]")
-                
-                # Filter out the buttons that contain "Report" in their text
-                red_buttons_elements = [button for button in all_red_buttons_elements if "Report" not in button.text]
-                
-                # Log the count of filtered red buttons
-                logger.info(f"Found {len(red_buttons_elements)} red button(s) (100% RD) without 'Report'. Verifying titles.")
+            confirmation_flag, confirmed_seasons = check_red_buttons(driver, movie_title, normalized_seasons, confirmed_seasons, is_tv_show)
 
-                for i, red_button_element in enumerate(red_buttons_elements, start=1):
-                    if "Report" in red_button_element.text:
-                        continue
-                    logger.info(f"Checking red button {i}...")
-
-                    try:
-                        # Adjusted XPath to find the <h2> element within the same parent container as the red button
-                        red_button_title_element = red_button_element.find_element(By.XPATH, ".//ancestor::div[contains(@class, 'border-2')]//h2")
-                        red_button_title_text = red_button_title_element.text.strip()
-
-                        # Clean the title for comparison
-                        red_button_title_cleaned = clean_title(red_button_title_text.split('(')[0].strip(), target_lang='en')
-                        red_button_title_normalized = normalize_title(red_button_title_text.split('(')[0].strip(), target_lang='en')
-
-                        # Clean and normalize the movie title once outside the loop
-                        movie_title_cleaned = clean_title(movie_title.split('(')[0].strip(), target_lang='en')
-                        movie_title_normalized = normalize_title(movie_title.split('(')[0].strip(), target_lang='en')
-
-                        logger.info(f"Red button {i} title: {red_button_title_cleaned}, Expected movie title: {movie_title_cleaned}")
-
-                        # Extract the year from the red button title, ignoring resolution strings
-                        red_button_year = extract_year(red_button_title_text, ignore_resolution=True)
-
-                        # Extract the expected year from the provided movie title (if it exists)
-                        expected_year = extract_year(movie_title)
-
-                        # Use fuzzy matching instead of startswith (also allow partial matching for more relaxed comparisons)
-                        title_match_ratio = fuzz.partial_ratio(red_button_title_cleaned.lower(), movie_title_cleaned.lower())
-                        title_match_threshold = 75  # You can lower or raise this based on how aggressive you want it to be.
-
-                        # Additional title comparison logic with fuzzy matching and threshold
-                        title_matched = False
-                        if (
-                            title_match_ratio >= title_match_threshold or  # Fuzzy match title (relaxed match)
-                            movie_title_normalized.startswith(red_button_title_normalized)  # Backwards title check
-                        ):
-                            # Titles match within boundaries.
-                            title_matched = True  # Consider this a valid match.
-
-                        # Expanded year match check with more leeway (±2 years to avoid overly strict checks)
-                        year_matched = (expected_year is None or abs(red_button_year - expected_year) <= 2)
-
-                        if title_matched and year_matched:
-                            logger.info(f"Found a match on red button {i} - {red_button_title_cleaned}. Skipping...")
-                            # Handle the RD button selection or matching action here
-                            confirmation_flag = True  # Mark as confirmed match.
-                            return confirmation_flag  # Once we click a matching button, we stop further checks.
-
-                        else:
-                            # If no match, continue with the next available RD red button.
-                            logger.warning(f"No match for red button {i}: Title - {red_button_title_cleaned}, Year - {red_button_year}. Moving to next red button.")
-
-                    except NoSuchElementException as e:
-                        logger.warning(f"Could not find title associated with red button {i}: {e}")
-                        continue  # If a title is not found for a red button, continue to the next one
-            except NoSuchElementException:
-                logger.info("No red buttons (100% RD) detected. Proceeding with optional fallback.")
-
+            # If a red button is confirmed, skip further processing
+            if confirmation_flag:
+                logger.success("Red button confirmed. Checking if Movie or TV Show...")
+            # If a red button is confirmed and it's not a TV show, skip further processing
+            if confirmation_flag and not is_tv_show:
+                logger.success("Red button confirmed for Movie. Skipping further processing.")
+                return confirmation_flag
 
             # After clicking the matched movie title, we now check the popup boxes for Instant RD buttons
             # Step 8: Check the result boxes with the specified class for "Instant RD"
             try:
-                result_boxes = WebDriverWait(driver, 10).until(
-                    EC.presence_of_all_elements_located((By.XPATH, "//div[contains(@class, 'border-black')]"))
-                )
+                if is_tv_show and normalized_seasons:
+                    logger.info(f"Processing TV show seasons for: {movie_title}")
 
-                for i, result_box in enumerate(result_boxes, start=1):
-                    try:
-                        # Extract the title from the result box
-                        title_element = result_box.find_element(By.XPATH, ".//h2")
-                        title_text = title_element.text.strip()
-                        logger.info(f"Box {i} title: {title_text}")
+                    # Process each requested season sequentially
+                    for season in normalized_seasons:
+                        # Skip this season if it has already been confirmed
+                        if season in confirmed_seasons:
+                            logger.info(f"Season {season} has already been confirmed. Skipping.")
+                            continue  # Skip this season
 
-                        # Extract the year from the title
-                        box_year = extract_year(title_text)
-                        if box_year is None:
-                            logger.warning(f"Could not extract year from '{title_text}'. Skipping box {i}.")
+                        # Extract the season number (e.g., "6" from "Season 6")
+                        season_number = season.split()[-1]  # Assumes season is in the format "Season X"
+
+                        # Get the base URL (root URL without the season number)
+                        base_url = driver.current_url.split("/")[:-1]  # Split the URL and remove the last part (season number)
+                        base_url = "/".join(base_url)  # Reconstruct the base URL
+
+                        # Construct the new URL by appending the season number
+                        season_url = f"{base_url}/{season_number}"
+
+                        # Navigate to the new URL
+                        driver.get(season_url)
+                        time.sleep(2)  # Wait for the page to load
+                        logger.info(f"Navigated to season {season} URL: {season_url}")
+
+                        # Perform red button checks for the current season
+                        confirmation_flag, confirmed_seasons = check_red_buttons(driver, movie_title, normalized_seasons, confirmed_seasons, is_tv_show)
+                        # If a red button is confirmed, skip further processing for this season
+                        if confirmation_flag and is_tv_show:
+                            logger.success(f"Red button confirmed for {season}. Skipping further processing for this season.")
+                            continue
+                        # Re-locate the result boxes after navigating to the new URL
+                        try:
+                            result_boxes = WebDriverWait(driver, 10).until(
+                                EC.presence_of_all_elements_located((By.XPATH, "//div[contains(@class, 'border-black')]"))
+                            )
+                        except TimeoutException:
+                            logger.warning(f"No result boxes found for season {season}. Skipping.")
                             continue
 
-                        # Clean both the movie title and the box title for comparison
-                        movie_title_cleaned = clean_title(movie_title.split('(')[0].strip(), target_lang='en')
-                        title_text_cleaned = clean_title(title_text.split(str(box_year))[0].strip(), target_lang='en')
+                        # Now process the result boxes for the current season
+                        for i, result_box in enumerate(result_boxes, start=1):
+                            try:
+                                # Extract the title from the result box
+                                title_element = result_box.find_element(By.XPATH, ".//h2")
+                                title_text = title_element.text.strip()
+                                logger.info(f"Box {i} title: {title_text}")
+                                # Check if the result box contains "with extras" and skip if it does
+                                try:
+                                    extras_element = WebDriverWait(result_box, 2).until(
+                                        EC.presence_of_element_located((By.XPATH, ".//span[contains(., 'Single')]"))
+                                    )
+                                    logger.info(f"Box {i} contains 'Single'. Skipping.")
+                                    continue
+                                except TimeoutException:
+                                    logger.info(f"Box {i} does not contain 'Single'. Proceeding.")
+                                # Clean and normalize the TV show title for comparison
+                                tv_show_title_cleaned = clean_title(movie_title.split('(')[0].strip(), target_lang='en')
+                                title_text_cleaned = clean_title(title_text.split('(')[0].strip(), target_lang='en')
 
-                        movie_title_normalized = normalize_title(movie_title.split('(')[0].strip(), target_lang='en')
-                        title_text_normalized = normalize_title(title_text.split(str(box_year))[0].strip(), target_lang='en')
+                                # Normalize the titles for comparison
+                                tv_show_title_normalized = normalize_title(tv_show_title_cleaned, target_lang='en')
+                                title_text_normalized = normalize_title(title_text_cleaned, target_lang='en')
 
+                                # Convert digits to words for comparison
+                                tv_show_title_cleaned_word = replace_numbers_with_words(tv_show_title_cleaned)
+                                title_text_cleaned_word = replace_numbers_with_words(title_text_cleaned)
 
-                        # Convert digits to words for comparison
-                        movie_title_cleaned_word = replace_numbers_with_words(movie_title_cleaned)
-                        title_text_cleaned_word = replace_numbers_with_words(title_text_cleaned)
-                        movie_title_normalized_word = replace_numbers_with_words(movie_title_normalized)
-                        title_text_normalized_word = replace_numbers_with_words(title_text_normalized)
+                                # Convert words to digits for comparison
+                                tv_show_title_cleaned_digit = replace_words_with_numbers(tv_show_title_cleaned)
+                                title_text_cleaned_digit = replace_words_with_numbers(title_text_cleaned)
 
-                        # Convert words to digits for comparison
-                        movie_title_cleaned_digit = replace_words_with_numbers(movie_title_cleaned)
-                        title_text_cleaned_digit = replace_words_with_numbers(title_text_cleaned)
-                        movie_title_normalized_digit = replace_words_with_numbers(movie_title_normalized)
-                        title_text_normalized_digit = replace_words_with_numbers(title_text_normalized)
+                                # Log all variations for debugging
+                                logger.info(f"Cleaned TV show title: {tv_show_title_cleaned}, Cleaned box title: {title_text_cleaned}")
+                                logger.info(f"TV show title (digits to words): {tv_show_title_cleaned_word}, Box title (digits to words): {title_text_cleaned_word}")
+                                logger.info(f"TV show title (words to digits): {tv_show_title_cleaned_digit}, Box title (words to digits): {title_text_cleaned_digit}")
 
-                        # Log all variations for debugging
-                        logger.info(f"Cleaned movie title: {movie_title_cleaned}, Cleaned box title: {title_text_cleaned}")
-                        logger.info(f"Normalized movie title: {movie_title_normalized}, Normalized box title: {title_text_normalized}")
-                        logger.info(f"Movie title (digits to words): {movie_title_cleaned_word}, Box title (digits to words): {title_text_cleaned_word}")
-                        logger.info(f"Movie title (words to digits): {movie_title_cleaned_digit}, Box title (words to digits): {title_text_cleaned_digit}")
+                                # Compare the title in all variations
+                                if not (
+                                    fuzz.partial_ratio(title_text_cleaned.lower(), tv_show_title_cleaned.lower()) >= 75 or
+                                    fuzz.partial_ratio(title_text_cleaned_word.lower(), tv_show_title_cleaned_word.lower()) >= 75 or
+                                    fuzz.partial_ratio(title_text_cleaned_digit.lower(), tv_show_title_cleaned_digit.lower()) >= 75
+                                ):
+                                    logger.warning(f"Title mismatch for box {i}: {title_text_cleaned} or {title_text_normalized} (Expected: {tv_show_title_cleaned} or {tv_show_title_normalized}). Skipping.")
+                                    continue  # Skip this box if none of the variations match
 
-                        # Compare the title in all variations
-                        if not (
-                            fuzz.partial_ratio(title_text_cleaned.lower(), movie_title_cleaned.lower()) >= 75 or
-                            fuzz.partial_ratio(title_text_normalized.lower(), movie_title_normalized.lower()) >= 75 or
-                            fuzz.partial_ratio(title_text_cleaned_word.lower(), movie_title_cleaned_word.lower()) >= 75 or
-                            fuzz.partial_ratio(title_text_normalized_word.lower(), movie_title_normalized_word.lower()) >= 75 or
-                            fuzz.partial_ratio(title_text_cleaned_digit.lower(), movie_title_cleaned_digit.lower()) >= 75 or
-                            fuzz.partial_ratio(title_text_normalized_digit.lower(), movie_title_normalized_digit.lower()) >= 75
-                        ):
-                            logger.warning(f"Title mismatch for box {i}: {title_text_cleaned} or {title_text_normalized} (Expected: {movie_title_cleaned} or {movie_title_normalized}). Skipping.")
-                            continue  # Skip this box if none of the variations match
+                                # Check for complete season packs first
+                                if match_complete_seasons(title_text, [season]):
+                                    logger.info(f"Found complete season pack for {season} in box {i}: {title_text}")
+                                    if prioritize_buttons_in_box(result_box):
+                                        logger.success(f"Successfully handled complete season pack in box {i}.")
+                                        confirmation_flag = True
 
-                        # Compare the year with the expected year (allow ±1 year)
-                        expected_year = extract_year(movie_title)
-                        if expected_year is not None and abs(box_year - expected_year) > 1:
-                            logger.warning(f"Year mismatch for box {i}: {box_year} (Expected: {expected_year}). Skipping.")
-                            continue  # Skip this box if the year doesn't match
+                                        # Add the confirmed season to the set
+                                        confirmed_seasons.add(season)
+                                        logger.info(f"Added {season} to confirmed seasons: {confirmed_seasons}")
 
-                        # After navigating to the movie details page and verifying the title/year
-                        if prioritize_buttons_in_box(result_box):
-                            logger.info(f"Successfully handled buttons in box {i}.")
-                            confirmation_flag = True  # Mark confirmation as successful
-                        else:
-                            logger.warning(f"Failed to handle buttons in box {i}. Skipping.")
-                        # After clicking, check if the button has changed to "RD (0%)" or "RD (100%)"
+                                        # Perform RD status checks after clicking the button
+                                        try:
+                                            rd_button = WebDriverWait(driver, 10).until(
+                                                EC.presence_of_element_located((By.XPATH, ".//button[contains(text(), 'RD (')]"))
+                                            )
+                                            rd_button_text = rd_button.text
+                                            logger.info(f"RD button text after clicking: {rd_button_text}")
+
+                                            # If the button is now "RD (0%)", undo the click and retry with the next box
+                                            if "RD (0%)" in rd_button_text:
+                                                logger.warning(f"RD (0%) button detected after clicking Instant RD in box {i} {title_text}. Undoing the click and moving to the next box.")
+                                                rd_button.click()  # Undo the click by clicking the RD (0%) button
+                                                confirmation_flag = False  # Reset the flag
+                                                continue  # Move to the next box
+
+                                            # If it's "RD (100%)", we are done with this entry
+                                            if "RD (100%)" in rd_button_text:
+                                                logger.success(f"RD (100%) button detected. {i} {title_text}. This entry is complete.")
+                                                break  # Move to the next season
+
+                                        except TimeoutException:
+                                            logger.warning(f"Timeout waiting for RD button status change in box {i}.")
+                                            continue  # Move to the next box if a timeout occurs
+
+                                # If no complete pack, check for individual seasons
+                                if match_single_season(title_text, season):
+                                    logger.info(f"Found matching season {season} in box {i}: {title_text}")
+                                    if prioritize_buttons_in_box(result_box):
+                                        logger.success(f"Successfully handled season {season} in box {i}.")
+                                        confirmation_flag = True
+
+                                        # Add the confirmed season to the set
+                                        confirmed_seasons.add(season)
+                                        logger.info(f"Added {season} to confirmed seasons: {confirmed_seasons}")
+
+                                        # Perform RD status checks after clicking the button
+                                        try:
+                                            rd_button = WebDriverWait(driver, 10).until(
+                                                EC.presence_of_element_located((By.XPATH, ".//button[contains(text(), 'RD (')]"))
+                                            )
+                                            rd_button_text = rd_button.text
+                                            logger.info(f"RD button text after clicking: {rd_button_text}")
+
+                                            # If the button is now "RD (0%)", undo the click and retry with the next box
+                                            if "RD (0%)" in rd_button_text:
+                                                logger.warning(f"RD (0%) button detected after clicking Instant RD in box {i} {title_text}. Undoing the click and moving to the next box.")
+                                                rd_button.click()  # Undo the click by clicking the RD (0%) button
+                                                confirmation_flag = False  # Reset the flag
+                                                continue  # Move to the next box
+
+                                            # If it's "RD (100%)", we are done with this entry
+                                            if "RD (100%)" in rd_button_text:
+                                                logger.success(f"RD (100%) button detected. {i} {title_text}. This entry is complete.")
+                                                break  # Move to the next season
+
+                                        except TimeoutException:
+                                            logger.warning(f"Timeout waiting for RD button status change in box {i}.")
+                                            continue  # Move to the next box if a timeout occurs
+
+                            except NoSuchElementException as e:
+                                logger.warning(f"Could not find 'Instant RD' button in box {i}: {e}")
+                            except TimeoutException as e:
+                                logger.warning(f"Timeout when processing box {i}: {e}")
+
+                        # Log completion of the current season
+                        logger.success(f"Completed processing for {season}.")
+
+                    # Log completion of all requested seasons
+                    logger.success(f"Completed processing for all requested seasons: {normalized_seasons}.")
+
+                else:
+                    # Handle movies or TV shows without specific seasons
+                    # Re-locate the result boxes after navigating to the new URL
+                    try:
+                        result_boxes = WebDriverWait(driver, 10).until(
+                            EC.presence_of_all_elements_located((By.XPATH, "//div[contains(@class, 'border-black')]"))
+                        )
+                    except TimeoutException:
+                        logger.warning(f"No result boxes found. Skipping.")
+
+                    for i, result_box in enumerate(result_boxes, start=1):
                         try:
-                            rd_button = WebDriverWait(driver, 10).until(
-                                EC.presence_of_element_located((By.XPATH, ".//button[contains(text(), 'RD (')]"))
-                            )
-                            rd_button_text = rd_button.text
-                            logger.info(f"RD button text after clicking: {rd_button_text}")
+                            # Extract the title from the result box
+                            title_element = result_box.find_element(By.XPATH, ".//h2")
+                            title_text = title_element.text.strip()
+                            logger.info(f"Box {i} title: {title_text}")
 
-                            # If the button is now "RD (0%)", undo the click and retry with the next box
-                            if "RD (0%)" in rd_button_text:
-                                logger.warning(f"RD (0%) button detected after clicking Instant RD in box {i} {title_text}. Undoing the click and moving to the next box.")
-                                rd_button.click()  # Undo the click by clicking the RD (0%) button
-                                continue  # Move to the next box
+                            # Check if the result box contains "with extras" and skip if it does
+                            try:
+                                extras_element = WebDriverWait(result_box, 2).until(
+                                    EC.presence_of_element_located((By.XPATH, ".//span[contains(., 'With extras')]"))
+                                )
+                                logger.info(f"Box {i} contains 'With extras'. Skipping.")
+                                continue
+                            except TimeoutException:
+                                logger.info(f"Box {i} does not contain 'With extras'. Proceeding.")
+                            # Clean both the movie title and the box title for comparison
+                            movie_title_cleaned = clean_title(movie_title.split('(')[0].strip(), target_lang='en')
+                            title_text_cleaned = clean_title(title_text.split('(')[0].strip(), target_lang='en')
 
-                            # If it's "RD (100%)", we are done with this entry
-                            if "RD (100%)" in rd_button_text:
-                                logger.success(f"RD (100%) button detected. {i} {title_text}. This entry is complete.")
+                            movie_title_normalized = normalize_title(movie_title.split('(')[0].strip(), target_lang='en')
+                            title_text_normalized = normalize_title(title_text.split('(')[0].strip(), target_lang='en')
+
+                            # Convert digits to words for comparison
+                            movie_title_cleaned_word = replace_numbers_with_words(movie_title_cleaned)
+                            title_text_cleaned_word = replace_numbers_with_words(title_text_cleaned)
+                            movie_title_normalized_word = replace_numbers_with_words(movie_title_normalized)
+                            title_text_normalized_word = replace_numbers_with_words(title_text_normalized)
+
+                            # Convert words to digits for comparison
+                            movie_title_cleaned_digit = replace_words_with_numbers(movie_title_cleaned)
+                            title_text_cleaned_digit = replace_words_with_numbers(title_text_cleaned)
+                            movie_title_normalized_digit = replace_words_with_numbers(movie_title_normalized)
+                            title_text_normalized_digit = replace_words_with_numbers(title_text_normalized)
+
+                            # Log all variations for debugging
+                            logger.info(f"Cleaned movie title: {movie_title_cleaned}, Cleaned box title: {title_text_cleaned}")
+                            logger.info(f"Normalized movie title: {movie_title_normalized}, Normalized box title: {title_text_normalized}")
+                            logger.info(f"Movie title (digits to words): {movie_title_cleaned_word}, Box title (digits to words): {title_text_cleaned_word}")
+                            logger.info(f"Movie title (words to digits): {movie_title_cleaned_digit}, Box title (words to digits): {title_text_cleaned_digit}")
+
+                            # Compare the title in all variations
+                            if not (
+                                fuzz.partial_ratio(title_text_cleaned.lower(), movie_title_cleaned.lower()) >= 75 or
+                                fuzz.partial_ratio(title_text_normalized.lower(), movie_title_normalized.lower()) >= 75 or
+                                fuzz.partial_ratio(title_text_cleaned_word.lower(), movie_title_cleaned_word.lower()) >= 75 or
+                                fuzz.partial_ratio(title_text_normalized_word.lower(), movie_title_normalized_word.lower()) >= 75 or
+                                fuzz.partial_ratio(title_text_cleaned_digit.lower(), movie_title_cleaned_digit.lower()) >= 75 or
+                                fuzz.partial_ratio(title_text_normalized_digit.lower(), movie_title_normalized_digit.lower()) >= 75
+                            ):
+                                logger.warning(f"Title mismatch for box {i}: {title_text_cleaned} or {title_text_normalized} (Expected: {movie_title_cleaned} or {movie_title_normalized}). Skipping.")
+                                continue  # Skip this box if none of the variations match
+
+                            # Compare the year with the expected year (allow ±1 year) only if it's not a TV show
+                            if not is_tv_show:
+                                expected_year = extract_year(movie_title)
+                                box_year = extract_year(title_text)
+
+                                # Check if either year is None before performing the subtraction
+                                if expected_year is None or box_year is None:
+                                    logger.warning("Could not extract year from title or box title. Skipping year comparison.")
+                                    continue  # Skip this box if the year is missing
+
+                                if abs(box_year - expected_year) > 1:
+                                    logger.warning(f"Year mismatch for box {i}: {box_year} (Expected: {expected_year}). Skipping.")
+                                    continue  # Skip this box if the year doesn't match
+
+                            # After navigating to the movie details page and verifying the title/year
+                            if prioritize_buttons_in_box(result_box):
+                                logger.info(f"Successfully handled buttons in box {i}.")
                                 confirmation_flag = True
-                                return confirmation_flag  # Exit the function as we've found a matching red button
-                                break  # Break out of the loop since the task is complete
 
-                        except TimeoutException:
-                            logger.warning(f"Timeout waiting for RD button status change in box {i}.")
-                            continue  # Move to the next box if a timeout occurs
+                                # Perform RD status checks after clicking the button
+                                try:
+                                    rd_button = WebDriverWait(driver, 10).until(
+                                        EC.presence_of_element_located((By.XPATH, ".//button[contains(text(), 'RD (')]"))
+                                    )
+                                    rd_button_text = rd_button.text
+                                    logger.info(f"RD button text after clicking: {rd_button_text}")
 
-                    except NoSuchElementException as e:
-                        logger.warning(f"Could not find 'Instant RD' button in box {i}: {e}")
-                    except TimeoutException as e:
-                        logger.warning(f"Timeout when processing box {i}: {e}")
+                                    # If the button is now "RD (0%)", undo the click and retry with the next box
+                                    if "RD (0%)" in rd_button_text:
+                                        logger.warning(f"RD (0%) button detected after clicking Instant RD in box {i} {title_text}. Undoing the click and moving to the next box.")
+                                        rd_button.click()  # Undo the click by clicking the RD (0%) button
+                                        confirmation_flag = False  # Reset the flag
+                                        continue  # Move to the next box
+
+                                    # If it's "RD (100%)", we are done with this entry
+                                    if "RD (100%)" in rd_button_text:
+                                        logger.success(f"RD (100%) button detected. {i} {title_text}. This entry is complete.")
+                                        return confirmation_flag  # Exit the function as we've found a matching red button
+
+                                except TimeoutException:
+                                    logger.warning(f"Timeout waiting for RD button status change in box {i}.")
+                                    continue  # Move to the next box if a timeout occurs
+
+                            else:
+                                logger.warning(f"Failed to handle buttons in box {i}. Skipping.")
+
+                        except NoSuchElementException as e:
+                            logger.warning(f"Could not find 'Instant RD' button in box {i}: {e}")
+                        except TimeoutException as e:
+                            logger.warning(f"Timeout when processing box {i}: {e}")
+
+                        # If a successful action was taken, break out of the outer loop
+                        if confirmation_flag:
+                            break
 
             except TimeoutException:
                 logger.warning("Timeout waiting for result boxes to appear.")
@@ -1189,6 +1469,9 @@ async def jellyseer_webhook(request: Request, background_tasks: BackgroundTasks)
     # Log the specific event from the payload
     logger.success(f"Received webhook with event: {payload.event}")
 
+    media_type = payload.media.media_type
+    logger.success(f"Received webhook with event: {payload.event} for {media_type.capitalize()}")
+
     # Extract tmdbId from the payload
     tmdb_id = payload.media.tmdbId
     if not tmdb_id:
@@ -1199,22 +1482,18 @@ async def jellyseer_webhook(request: Request, background_tasks: BackgroundTasks)
     logger.info(f"Extracted tmdbId: {tmdb_id}")
 
     # Fetch movie details from Trakt using tmdb_id
-    movie_details = get_movie_details_from_trakt(tmdb_id)
-    if not movie_details:
-        logger.error("Failed to fetch movie details from Trakt")
-        raise HTTPException(status_code=500, detail="Failed to fetch movie details from Trakt")
+    media_details = get_media_details_from_trakt(payload.media.tmdbId, payload.media.media_type)
+    if not media_details:
+        logger.error(f"Failed to fetch {payload.media.media_type} details from Trakt")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch {payload.media.media_type} details from Trakt")
 
-    # Log the fetched movie details
-    movie_title = f"{movie_details['title']} ({movie_details['year']})"
-    logger.info(f"Fetched movie details: {movie_title}")
+    movie_or_tv_title = f"{media_details['title']} ({media_details['year']})"
+    logger.info(f"Fetched {media_type.capitalize()} details: {movie_or_tv_title}")
 
-    # Add movie request to background processing queue
-    background_tasks.add_task(add_request_to_queue, movie_title)
-    
-    # Log the response before returning
-    logger.info(f"Returning response: {movie_details['title']} ({movie_details['year']})")
-    
-    return {"status": "success", "movie_title": movie_details['title'], "movie_year": movie_details['year']}
+    background_tasks.add_task(add_request_to_queue, movie_or_tv_title, payload.extra)
+    logger.info(f"Returning response: {media_details['title']} ({media_details['year']})")
+
+    return {"status": "success", "title": media_details['title'], "year": media_details['year']}
 
 def schedule_token_refresh():
     """Schedule the token refresh every 10 minutes."""
@@ -1269,13 +1548,10 @@ async def startup_event():
     else:
         logger.warning("Invalid input. Please restart the bot and enter 'y' or 'n'.")
 
-
 def schedule_recheck_movie_requests():
     # Correctly schedule the job with the REFRESH_INTERVAL_MINUTES configured interval.
     scheduler.add_job(process_movie_requests, 'interval', minutes=REFRESH_INTERVAL_MINUTES)
     logger.info(f"Scheduled rechecking movie requests every {REFRESH_INTERVAL_MINUTES} minute(s).")
-
-
 
 async def on_close():
     await shutdown_browser()  # Ensure browser is closed when the bot closes
