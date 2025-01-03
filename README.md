@@ -187,7 +187,8 @@ Configure your webhook as mentioned above so SeerrBridge can ingest and process 
 
 3. Start the container:
     ```bash
-    docker-compose up -d
+    docker compose build
+    docker compose up -d
     ```
 
 4. Access the app at: [http://localhost:8777](http://localhost:8777).
