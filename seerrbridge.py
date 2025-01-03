@@ -1534,29 +1534,21 @@ async def startup_event():
     # Schedule the token refresh
     schedule_token_refresh()
     scheduler.start()
-    # Ask user if they want to proceed with the initial check and recurring task
+
+    # Check if automatic background task is enabled
     if ENABLE_AUTOMATIC_BACKGROUND_TASK:
-        user_input = 'y'
-    else: 
-        user_input = await get_user_input()
-    
-    if user_input == 'y':
+        logger.info("Automatic background task is enabled. Starting initial check and recurring task.")
         try:
             # Run the initial check immediately
             await process_movie_requests()
             logger.info("Completed initial check of movie requests.")
 
-            # Schedule the rechecking of movie requests every 2 hours
+            # Schedule the rechecking of movie requests every REFRESH_INTERVAL_MINUTES
             schedule_recheck_movie_requests()
         except Exception as e:
             logger.error(f"Error while processing movie requests: {e}")
-
-    elif user_input == 'n':
-        logger.info("Initial check and recurring task were skipped by user input.")
-        return  # Exit the function if the user opts out
-
     else:
-        logger.warning("Invalid input. Please restart the bot and enter 'y' or 'n'.")
+        logger.info("Automatic background task is disabled. Skipping initial check and recurring task.")
 
 def schedule_recheck_movie_requests():
     # Correctly schedule the job with the REFRESH_INTERVAL_MINUTES configured interval.
