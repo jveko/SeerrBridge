@@ -219,9 +219,33 @@ docker run -d \
 ```
 ---
 
-That's it! Your **SeerrBridge** container should now be up and running. 🚀
-
 ***IF YOU ARE USING OVERSEERR IN DOCKER AND SEERRBRIDGE IN DOCKER, YOUR WEBHOOK IN OVERSEERR NEEDS TO BE THE DOCKER CONTAINER IP***
+
+To find the IP of the SeerrBridge Docker container do the following:
+
+```bash
+docker ps
+```
+
+You will see the container and ID
+
+![image](https://github.com/user-attachments/assets/dac5fb21-89a7-42ff-8e73-911a6b8ee149)
+
+Grab the ID and do
+
+```bash
+docker inspect YOUR-ID
+```
+
+You will see the ID in the response:
+
+![image](https://github.com/user-attachments/assets/b9a67170-748b-4c44-b37c-86a820e8d09a)
+
+This will determine your Overseerr Webhook URL i.e. HTTP://DOCKER-CONTAINER-IP:8077/jellyseer-webhook/
+
+---
+
+That's it! Your **SeerrBridge** container should now be up and running. 🚀
 
 ---
 
