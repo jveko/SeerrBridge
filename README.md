@@ -77,6 +77,52 @@ Before you can run this script, ensure that you have the following prerequisites
 
 ![image](https://github.com/user-attachments/assets/170a2eb2-274a-4fc1-b288-5ada91a9fc47)
 
+Ensure your JSON payload is the following 
+
+```
+{
+    "notification_type": "{{notification_type}}",
+    "event": "{{event}}",
+    "subject": "{{subject}}",
+    "message": "{{message}}",
+    "image": "{{image}}",
+    "{{media}}": {
+        "media_type": "{{media_type}}",
+        "tmdbId": "{{media_tmdbid}}",
+        "tvdbId": "{{media_tvdbid}}",
+        "status": "{{media_status}}",
+        "status4k": "{{media_status4k}}"
+    },
+    "{{request}}": {
+        "request_id": "{{request_id}}",
+        "requestedBy_email": "{{requestedBy_email}}",
+        "requestedBy_username": "{{requestedBy_username}}",
+        "requestedBy_avatar": "{{requestedBy_avatar}}",
+        "requestedBy_settings_discordId": "{{requestedBy_settings_discordId}}",
+        "requestedBy_settings_telegramChatId": "{{requestedBy_settings_telegramChatId}}"
+    },
+    "{{issue}}": {
+        "issue_id": "{{issue_id}}",
+        "issue_type": "{{issue_type}}",
+        "issue_status": "{{issue_status}}",
+        "reportedBy_email": "{{reportedBy_email}}",
+        "reportedBy_username": "{{reportedBy_username}}",
+        "reportedBy_avatar": "{{reportedBy_avatar}}",
+        "reportedBy_settings_discordId": "{{reportedBy_settings_discordId}}",
+        "reportedBy_settings_telegramChatId": "{{reportedBy_settings_telegramChatId}}"
+    },
+    "{{comment}}": {
+        "comment_message": "{{comment_message}}",
+        "commentedBy_email": "{{commentedBy_email}}",
+        "commentedBy_username": "{{commentedBy_username}}",
+        "commentedBy_avatar": "{{commentedBy_avatar}}",
+        "commentedBy_settings_discordId": "{{commentedBy_settings_discordId}}",
+        "commentedBy_settings_telegramChatId": "{{commentedBy_settings_telegramChatId}}"
+    },
+    "{{extra}}": []
+}
+```
+
 ### 2. **Real-Debrid Account**
    - You will need a valid [Real-Debrid](https://real-debrid.com/) account to authenticate and interact with the Debrid Media Manager.
      - The Debrid Media Manager Access token, Client ID, Client Secret, & Refresh Tokens are used and should be set within your .env file. Grab this from your browser via Inspect > 
