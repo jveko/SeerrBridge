@@ -56,7 +56,7 @@ Simply put, I was too lazy to set up all of these other applications (arrs) and 
 | **AllDebrid**| ❌      | Coming Soon!      |
 | **TorBox**| ❌      | Coming Soon!       |
 | **SuggestArr**| ✅      | Automatically grab related content and send to Jellyseerr/Overseerr      |
-| **Windows & Linux**| ✅      | Tested and working in both Windows & Linux environments      |
+| **Windows & Linux x86-64**| ✅      | Tested and working in both Windows & Linux environments      |
 
 ---
 
