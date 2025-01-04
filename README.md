@@ -245,6 +245,49 @@ This will determine your Overseerr Webhook URL i.e. HTTP://DOCKER-CONTAINER-IP:8
 
 ---
 
+
+
+## Docker Network Configuration
+
+### Steps to Align Containers on the Same Network
+
+1. **Check Container Networks:**
+   Run the following command to list the containers and their associated networks:
+   ```bash
+   docker ps --format '{{ .ID }} {{ .Names }} {{ json .Networks }}'
+   ```
+   This will display the container IDs, names, and the networks they are connected to.
+
+2. **Disconnect the Container from Its Current Network:**
+   Use the following command to disconnect a container from its current network:
+   ```bash
+   docker network disconnect NETWORK_NAME CONTAINER_ID
+   ```
+   Replace `NETWORK_NAME` with the name of the network the container is currently on, and `CONTAINER_ID` with the ID of the container.
+
+3. **Connect the Container to the Desired Network:**
+   Use the following command to connect the container to the target network:
+   ```bash
+   docker network connect TARGET_NETWORK_NAME CONTAINER_ID
+   ```
+   Replace `TARGET_NETWORK_NAME` with the name of the network you want the container to join (e.g., `overseerr`), and `CONTAINER_ID` with the ID of the container.
+
+4. **Verify the Changes:**
+   Run the `docker ps --format '{{ .ID }} {{ .Names }} {{ json .Networks }}'` command again to confirm that both containers are now on the same network.
+
+### Example
+To move a container with ID `abc123` from its current network to the `overseerr` network:
+```bash
+docker network disconnect current_network abc123
+docker network connect overseerr abc123
+```
+
+### Notes
+- Ensure both containers are connected to the same network after completing the steps.
+- If the containers are still not communicating, double-check the network configuration and ensure no firewall rules are blocking the connection.
+
+---
+
 That's it! Your **SeerrBridge** container should now be up and running. 🚀
 
 ---
