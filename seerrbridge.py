@@ -1,5 +1,5 @@
 # =============================================================================
-# Soluify.com  |  Your #1 IT Problem Solver  |  {SeerrBridge v0.4.3}
+# Soluify.com  |  Your #1 IT Problem Solver  |  {SeerrBridge v0.4.4}
 # =============================================================================
 #  __         _
 # (_  _ |   .(_
@@ -108,8 +108,8 @@ class RequestInfo(BaseModel):
     requestedBy_email: str
     requestedBy_username: str
     requestedBy_avatar: str
-    requestedBy_settings_discordId: str
-    requestedBy_settings_telegramChatId: str
+    requestedBy_settings_discordId: Optional[str] = None
+    requestedBy_settings_telegramChatId: Optional[str] = None
 
 class IssueInfo(BaseModel):
     issue_id: str
@@ -971,14 +971,18 @@ def search_on_debrid(movie_title, driver, extra_data=None):
     logger.info(f"Search URL: {url}")
 
     try:
-        # Directly jump to the search results page after login
         driver.get(url)
         logger.success(f"Navigated to search results page for {movie_title}.")
         
-        # Wait for the results page to load dynamically
-        WebDriverWait(driver, 30).until(
-            EC.presence_of_element_located((By.XPATH, f"//a[contains(@href, '/movie/') or contains(@href, '/show/')]"))
-        )
+        # Attempt to locate the elements
+        try:
+            WebDriverWait(driver, 15).until(
+                EC.presence_of_element_located((By.XPATH, f"//a[contains(@href, '/movie/') or contains(@href, '/show/')]"))
+            )
+            logger.info("Elements are present. Continuing...")
+        except TimeoutException:
+            logger.error(f"Timeout while waiting for search results elements for {movie_title}. Stopping processing.")
+            return
 
         # Clean and normalize the movie title (remove year in parentheses)
         movie_title_cleaned = movie_title.split('(')[0].strip()
