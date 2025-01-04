@@ -1,5 +1,5 @@
 # =============================================================================
-# Soluify.com  |  Your #1 IT Problem Solver  |  {SeerrBridge v0.4.1} | TV Show Support!!!
+# Soluify.com  |  Your #1 IT Problem Solver  |  {SeerrBridge v0.4.3}
 # =============================================================================
 #  __         _
 # (_  _ |   .(_
@@ -8,8 +8,10 @@
 # © 2024
 # -----------------------------------------------------------------------------
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field, ValidationError, field_validator
 from typing import Optional, List, Dict, Any
+import httpx
 import asyncio
 import json
 import time
@@ -1557,6 +1559,44 @@ def schedule_recheck_movie_requests():
 
 async def on_close():
     await shutdown_browser()  # Ensure browser is closed when the bot closes
+
+async def check_overseerr_base_url(url: str) -> bool:
+    try:
+        logger.info(f"Attempting to check Overseerr base URL: {url}")
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url)
+            logger.info(f"Response from Overseerr base URL: {response.status_code}")
+            return response.status_code == 200 or 307
+    except Exception as e:
+        logger.error(f"Error checking Overseerr base URL: {e}")
+        return False
+
+@app.get("/", response_class=HTMLResponse)
+async def get_index():
+    with open("index.html", "r", encoding="utf-8") as file:
+        return HTMLResponse(content=file.read())
+
+@app.get("/env-vars")
+async def get_env_vars():
+    overseerr_base_status = await check_overseerr_base_url(OVERSEERR_BASE) if OVERSEERR_BASE else False
+
+    return {
+        # Sensitive information (show emojis for "Set" or "Missing")
+        "RD_ACCESS_TOKEN": "✅ Set" if RD_ACCESS_TOKEN else "❌ Missing",
+        "RD_REFRESH_TOKEN": "✅ Set" if RD_REFRESH_TOKEN else "❌ Missing",
+        "RD_CLIENT_ID": "✅ Set" if RD_CLIENT_ID else "❌ Missing",
+        "RD_CLIENT_SECRET": "✅ Set" if RD_CLIENT_SECRET else "❌ Missing",
+        "OVERSEERR_API_KEY": "✅ Set" if OVERSEERR_API_KEY else "❌ Missing",
+        "TRAKT_API_KEY": "✅ Set" if TRAKT_API_KEY else "❌ Missing",
+        # Non-sensitive information (show emojis for "Enabled" or "Disabled")
+        "HEADLESS_MODE": "✅ Enabled" if HEADLESS_MODE else "❌ Disabled",
+        "ENABLE_AUTOMATIC_BACKGROUND_TASK": "✅ Enabled" if ENABLE_AUTOMATIC_BACKGROUND_TASK else "❌ Disabled",
+        # Non-sensitive information (show actual values)
+        "TORRENT_FILTER_REGEX": TORRENT_FILTER_REGEX if TORRENT_FILTER_REGEX else "❌ Not Set",
+        "REFRESH_INTERVAL_MINUTES": REFRESH_INTERVAL_MINUTES if REFRESH_INTERVAL_MINUTES else "❌ Not Set",
+        # URL check
+        "OVERSEERR_BASE": "✅ Valid" if overseerr_base_status else "❌ Invalid",
+    }
 
 # Main entry point for running the FastAPI server
 if __name__ == "__main__":
