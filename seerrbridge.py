@@ -408,16 +408,28 @@ async def add_request_to_queue(movie_title, extra_data=None):
     return True
 
 ### Helper function to extract year from a string
-def extract_year(text, ignore_resolution=False):
-    if ignore_resolution:
-        # Remove resolution strings like "2160p"
-        text = re.sub(r'\b\d{3,4}p\b', '', text)
+def extract_year(text, expected_year=None, ignore_resolution=False):
+    """
+    Extracts the correct year from a movie title.
     
-    # Extract the year using a regular expression
-    match = re.search(r'\b(19\d{2}|20\d{2})\b', text)
-    if match:
-        return int(match.group(0))
-    return None
+    - Uses the explicitly provided expected_year (from TMDb or Trakt) if available.
+    - Ensures the year is not mistakenly extracted from the movie's name (like '1984' in 'Wonder Woman 1984').
+    """
+    if expected_year:
+        return expected_year  # Prioritize the known year from a reliable source
+
+    # Remove common video resolutions that might interfere
+    if ignore_resolution:
+        text = re.sub(r'\b\d{3,4}p\b', '', text)
+
+    # Extract years explicitly (avoid numbers inside movie titles)
+    years = re.findall(r'\b(19\d{2}|20\d{2})\b', text)
+    
+    if years:
+        # If multiple years are found, prefer the latest one
+        return int(max(years))
+
+    return None  # Return None if no valid year is found
 
 # Initialize the inflect engine for number-word conversion
 p = inflect.engine()
@@ -1002,10 +1014,12 @@ def search_on_debrid(movie_title, driver, extra_data=None):
                 
                 search_title_cleaned = movie_title_element.text.strip()
                 search_title_normalized = normalize_title(search_title_cleaned)
-                search_year = extract_year(movie_year_element.text)
-
-                # Extract the expected year from the provided movie title (if it exists)
-                expected_year = extract_year(movie_title)
+                expected_year = extract_year(movie_title)  # This pulls the correct target year
+                search_year = extract_year(movie_year_element.text, expected_year)  # Use TMDb/Trakt year as priority
+                
+                if search_year and expected_year and abs(search_year - expected_year) > 1:
+                    logger.warning(f"Year mismatch! Found: {search_year}, Expected: {expected_year}. Skipping...")
+                    continue  # Skip this match if the year difference is >1
 
                 # Use fuzzy matching to allow for minor differences in titles
                 title_match_ratio = fuzz.ratio(search_title_normalized.lower(), movie_title_normalized.lower())
