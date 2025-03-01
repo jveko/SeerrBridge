@@ -53,8 +53,8 @@ Simply put, I was too lazy to set up all of these other applications (arrs) and 
 | **Overseerr**   | ✅      | Base application Jellyseerr is based on  |
 | **Debrid Media Manager**| ✅      | Torrent fetching automation          |
 | **Real-Debrid**| ✅      | Unrestricted (torrent) downloader       |
-| **AllDebrid**| ❌      | Coming Soon!      |
-| **TorBox**| ❌      | Coming Soon!       |
+| **AllDebrid**| ❌      | Not Supported      |
+| **TorBox**| ❌      | Not Supported     |
 | **SuggestArr**| ✅      | Automatically grab related content and send to Jellyseerr/Overseerr      |
 | **Windows & Linux x86-64**| ✅      | Tested and working in both Windows & Linux environments      |
 
@@ -172,6 +172,8 @@ HEADLESS_MODE=true
 ENABLE_AUTOMATIC_BACKGROUND_TASK=false
 REFRESH_INTERVAL_MINUTES=120
 TORRENT_FILTER_REGEX=^(?!.*【.*?】)(?!.*[\u0400-\u04FF])(?!.*\[esp\]).*
+MAX_MOVIE_SIZE=0
+MAX_EPISODE_SIZE=0
 ```
 
 ---
@@ -229,6 +231,8 @@ Configure your webhook as mentioned above so SeerrBridge can ingest and process 
     ENABLE_AUTOMATIC_BACKGROUND_TASK=true
     REFRESH_INTERVAL_MINUTES=120
     TORRENT_FILTER_REGEX=^(?!.*【.*?】)(?!.*[\u0400-\u04FF])(?!.*\[esp\]).*
+    MAX_MOVIE_SIZE=5
+    MAX_EPISODE_SIZE=1
     ```
 
 3. Start the container:
@@ -261,6 +265,9 @@ docker run -d \
   -e ENABLE_AUTOMATIC_BACKGROUND_TASK=true \
   -e REFRESH_INTERVAL_MINUTES=120 \
   -e TORRENT_FILTER_REGEX=^(?!.*【.*?】)(?!.*[\u0400-\u04FF])(?!.*\[esp\]).* \
+  -e REFRESH_INTERVAL_MINUTES=120 \
+  -e MAX_MOVIE_SIZE=5 \
+  -e MAX_EPISODE_SIZE=1 \
   ghcr.io/woahai321/seerrbridge:main
 ```
 ---
@@ -341,8 +348,6 @@ That's it! Your **SeerrBridge** container should now be up and running. 🚀
 ## 🛤️ Roadmap
 
 - [ ] **Faster Processing**: Implement concurrency to handle multiple requests simultaneously.
-- [ ] **Login With AllDebrid**: Support for users on AllDebrid.
-- [ ] **Login With TorBox**: Support for users on TorBox.
 - [x] **TV Show Support**: Extend functionality to handle TV series and episodes.
 - [x] **DMM Token**: Ensure access token permanence/refresh
 - [x] **Jellyseer/Overseer API Integration**: Direct integration with Jellyseer/Overseer API for smoother automation and control.
@@ -369,6 +374,30 @@ Example:
 ![Seerr](https://github.com/user-attachments/assets/cc61cb67-0f64-4172-bc10-9f32021f697a)
 
 ---
+
+## 📁 Movie and Show File Sizes
+
+For movies, possible values are: 
+| Value | Description |
+| :-----------: | :-----------: |
+| 0| Biggest Size Possible |
+|1|1 GB|
+|3|3 GB|
+|5|5 GB **(Default)**|
+|15|15 GB|
+|30|30 GB|
+|60|60 GB|
+
+For episodes, possible values are: 
+| Value | Description |
+| :-----------: | :-----------: |
+| 0| Biggest Size Possible |
+|0.1|100 MB|
+|0.3|300 MB|
+|0.5|500 MB|
+|1|1 GB **(Default)**|
+|3|3 GB|
+|5|5 GB|
 
 ## 🎯 Custom Regex Filtering
 
