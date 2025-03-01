@@ -1,11 +1,11 @@
 # =============================================================================
-# Soluify.com  |  Your #1 IT Problem Solver  |  {SeerrBridge v0.4.4}
+# Soluify.com  |  Your #1 IT Problem Solver  |  {SeerrBridge v0.4.5}
 # =============================================================================
 #  __         _
 # (_  _ |   .(_
 # __)(_)||_||| \/
 #              /
-# © 2024
+# © 2025
 # -----------------------------------------------------------------------------
 from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from fastapi.responses import HTMLResponse
@@ -27,7 +27,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from webdriver_manager.chrome import ChromeDriverManager
-from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support.ui import WebDriverWait, Select
 from selenium.webdriver.support import expected_conditions as EC
 from dotenv import load_dotenv
 from selenium.common.exceptions import StaleElementReferenceException, NoSuchElementException, TimeoutException
@@ -62,6 +62,8 @@ TRAKT_API_KEY = os.getenv('TRAKT_API_KEY')
 HEADLESS_MODE = os.getenv("HEADLESS_MODE", "true").lower() == "true"
 ENABLE_AUTOMATIC_BACKGROUND_TASK = os.getenv("ENABLE_AUTOMATIC_BACKGROUND_TASK", "false").lower() == "true"
 TORRENT_FILTER_REGEX = os.getenv("TORRENT_FILTER_REGEX")
+MAX_MOVIE_SIZE = os.getenv("MAX_MOVIE_SIZE")
+MAX_EPISODE_SIZE = os.getenv("MAX_EPISODE_SIZE")
 
 # Confirm the interval is a valid number.
 try:
@@ -297,6 +299,7 @@ async def initialize_browser():
         # Log initialization method
         logger.info("Using WebDriver Manager for dynamic ChromeDriver downloads.")
 
+
         try:
             # Use webdriver-manager to install the appropriate ChromeDriver version
             driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
@@ -338,6 +341,31 @@ async def initialize_browser():
             )
             settings_link.click()
             logger.info("Clicked on '⚙️ Settings' link.")
+
+            logger.info("Locating maximum movie size select element in '⚙️ Settings'.")
+            max_movie_select_elem = WebDriverWait(driver, 10).until(
+                EC.visibility_of_element_located((By.ID, "dmm-movie-max-size"))
+            )
+
+            # Initialize Select class with the <select> WebElement
+            select_obj = Select(max_movie_select_elem)
+
+            # Select size specified in the .env file
+            select_obj.select_by_value(MAX_MOVIE_SIZE)
+            logger.info("Biggest Movie Size Selected as {} GB.".format(MAX_MOVIE_SIZE))
+
+            # MAX EPISODE SIZE: Locate the maximum series size select element
+            logger.info("Locating maximum series size select element in '⚙️ Settings'.")
+            max_episode_select_elem = WebDriverWait(driver, 10).until(
+                EC.visibility_of_element_located((By.ID, "dmm-episode-max-size"))
+            )
+
+            # Initialize Select class with the <select> WebElement
+            select_obj = Select(max_episode_select_elem)
+
+            # Select size specified in the .env file
+            select_obj.select_by_value(MAX_EPISODE_SIZE)
+            logger.info("Biggest Episode Size Selected as {} GB.".format(MAX_EPISODE_SIZE))
 
             # Locate the "Default torrents filter" input box and insert the regex
             logger.info("Attempting to insert regex into 'Default torrents filter' box.")
@@ -388,23 +416,23 @@ async def shutdown_browser():
 ### Function to process requests from the queue
 async def process_requests():
     while True:
-        movie_title, extra_data = await request_queue.get()  # Wait for the next request in the queue
-        logger.info(f"Processing movie request: {movie_title}")
+        imdb_id, movie_title, media_type, extra_data = await request_queue.get()
+        logger.info(f"Processing request for IMDb ID: {imdb_id}, Title: {movie_title}, Media Type: {media_type}")
         try:
-            await asyncio.to_thread(search_on_debrid, movie_title, driver, extra_data)  # Process the request
+            await asyncio.to_thread(search_on_debrid, imdb_id, movie_title, media_type, driver, extra_data)
         except Exception as ex:
-            logger.critical(f"Error processing movie request {movie_title}: {ex}")
+            logger.critical(f"Error processing request for IMDb ID {imdb_id}: {ex}")
         finally:
-            request_queue.task_done()  # Mark the request as done
+            request_queue.task_done()
 
 ### Function to add requests to the queue
-async def add_request_to_queue(movie_title, extra_data=None):
+async def add_request_to_queue(imdb_id, movie_title, media_type, extra_data=None):
     if request_queue.full():
-        logger.warning(f"Request queue is full. Cannot add movie: {movie_title}")
+        logger.warning(f"Request queue is full. Cannot add request for IMDb ID: {imdb_id}")
         return False
     
-    await request_queue.put((movie_title, extra_data))
-    logger.info(f"Added movie request to queue: {movie_title}")
+    await request_queue.put((imdb_id, movie_title, media_type, extra_data))
+    logger.info(f"Added request to queue for IMDb ID: {imdb_id}, Title: {movie_title}, Media Type: {media_type}")
     return True
 
 ### Helper function to extract year from a string
@@ -569,7 +597,8 @@ def get_media_details_from_trakt(tmdb_id: str, media_type: str) -> Optional[dict
                 media_info = data[0][trakt_type]
                 return {
                     "title": media_info['title'],
-                    "year": media_info['year']
+                    "year": media_info['year'],
+                    "imdb_id": media_info['ids']['imdb']  # Added to fetch IMDb ID
                 }
             else:
                 logger.error(f"{trakt_type.capitalize()} details for ID not found in Trakt API response.")
@@ -602,17 +631,18 @@ async def process_movie_requests():
             logger.info(f"Requested seasons for TV show: {requested_seasons}")
 
         # Fetch media details from Trakt
-        movie_details = get_media_details_from_trakt(tmdb_id, media_type)  # Pass media_type here
+        movie_details = get_media_details_from_trakt(tmdb_id, media_type)  # Only pass tmdb_id and media_type
         if not movie_details:
             logger.error(f"Failed to get media details for TMDB ID {tmdb_id}")
             continue
-        
+            
+        imdb_id = movie_details['imdb_id']
         media_title = f"{movie_details['title']} ({movie_details['year']})"
         logger.info(f"Processing {media_type} request: {media_title}")
         
         try:
             # Pass media_type and extra_data to search_on_debrid
-            confirmation_flag = await asyncio.to_thread(search_on_debrid, media_title, driver, extra_data)
+            confirmation_flag = await asyncio.to_thread(search_on_debrid, imdb_id, media_title, media_type, driver, extra_data)
             if confirmation_flag:
                 if mark_completed(media_id, tmdb_id):
                     logger.success(f"Marked media {media_id} as completed in Overseerr")
@@ -958,9 +988,11 @@ def check_red_buttons(driver, movie_title, normalized_seasons, confirmed_seasons
     return confirmation_flag, confirmed_seasons
 
 ### Search Function to Reuse Browser
-def search_on_debrid(movie_title, driver, extra_data=None):
-    logger.info(f"Starting Selenium automation for movie: {movie_title}")
-
+def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None):
+    logger.info(f"Starting Selenium automation for IMDb ID: {imdb_id}, Media Type: {media_type}")
+    if driver is None:
+        logger.error("Selenium WebDriver is not initialized. Cannot proceed.")
+        return False
     # Extract requested seasons from the extra data
     requested_seasons = parse_requested_seasons(extra_data) if extra_data else []
     normalized_seasons = [normalize_season(season) for season in requested_seasons]
@@ -969,77 +1001,19 @@ def search_on_debrid(movie_title, driver, extra_data=None):
     is_tv_show = any(item['name'] == 'Requested Seasons' for item in extra_data) if extra_data else False
     logger.info(f"Media type: {'TV Show' if is_tv_show else 'Movie'}")
 
-    # Check if the driver is None before proceeding to avoid NoneType errors
-    if not driver:
-        logger.error("Selenium WebDriver is not initialized. Attempting to reinitialize.")
-        driver = initialize_browser()
-
-    debrid_media_manager_base_url = "https://debridmediamanager.com/search?query="
-    
-    # Use urllib to encode the movie title safely, handling all special characters including '&', ':', '(', ')'
-    encoded_movie_title = urllib.parse.quote(movie_title)
-    
-    url = debrid_media_manager_base_url + encoded_movie_title
-    logger.info(f"Search URL: {url}")
-
     try:
-        driver.get(url)
-        logger.success(f"Navigated to search results page for {movie_title}.")
-        
-        # Attempt to locate the elements
-        try:
-            WebDriverWait(driver, 15).until(
-                EC.presence_of_element_located((By.XPATH, f"//a[contains(@href, '/movie/') or contains(@href, '/show/')]"))
-            )
-            logger.info("Elements are present. Continuing...")
-        except TimeoutException:
-            logger.error(f"Timeout while waiting for search results elements for {movie_title}. Stopping processing.")
-            return
-
-        # Clean and normalize the movie title (remove year in parentheses)
-        movie_title_cleaned = movie_title.split('(')[0].strip()
-        movie_title_normalized = normalize_title(movie_title_cleaned)
-        logger.info(f"Searching for normalized movie title: {movie_title_normalized}")
-
-        # Find the movie result elements
-        try:
-            movie_elements = WebDriverWait(driver, 10).until(
-                EC.presence_of_all_elements_located((By.XPATH, f"//a[contains(@href, '/movie/') or contains(@href, '/show/')]"))
-            )
-
-            # Iterate over the movie elements to find the correct one
-            for movie_element in movie_elements:
-                movie_title_element = movie_element.find_element(By.XPATH, ".//h3")
-                movie_year_element = movie_element.find_element(By.XPATH, ".//div[contains(@class, 'text-gray-600')]")
-                
-                search_title_cleaned = movie_title_element.text.strip()
-                search_title_normalized = normalize_title(search_title_cleaned)
-                expected_year = extract_year(movie_title)  # This pulls the correct target year
-                search_year = extract_year(movie_year_element.text, expected_year)  # Use TMDb/Trakt year as priority
-                
-                if search_year and expected_year and abs(search_year - expected_year) > 1:
-                    logger.warning(f"Year mismatch! Found: {search_year}, Expected: {expected_year}. Skipping...")
-                    continue  # Skip this match if the year difference is >1
-
-                # Use fuzzy matching to allow for minor differences in titles
-                title_match_ratio = fuzz.ratio(search_title_normalized.lower(), movie_title_normalized.lower())
-                logger.info(f"Comparing '{search_title_normalized}' with '{movie_title_normalized}' (Match Ratio: {title_match_ratio})")
-
-                # Check if the titles match (with a threshold) and if the years are within ±1 year range
-                if title_match_ratio >= 69 and (expected_year is None or abs(search_year - expected_year) <= 1):
-                    logger.info(f"Found matching movie: {search_title_cleaned} ({search_year})")
-                    
-                    # Click on the parent <a> tag (which is the clickable link)
-                    parent_link = movie_element
-                    parent_link.click()
-                    logger.success(f"Clicked on the movie link for {search_title_cleaned}")
-                    break
-            else:
-                logger.error(f"No matching movie found for {movie_title_cleaned} ({expected_year})")
-                return
-        except (TimeoutException, NoSuchElementException) as e:
-            logger.critical(f"Failed to find or click on the search result: {movie_title}")
-            return
+        # Navigate directly using IMDb ID
+        if media_type == 'movie':
+            url = f"https://debridmediamanager.com/movie/{imdb_id}"
+            driver.get(url)
+            logger.success(f"Navigated to movie page: {url}")
+        elif media_type == 'tv':
+            url = f"https://debridmediamanager.com/show/{imdb_id}"
+            driver.get(url)
+            logger.success(f"Navigated to show page: {url}")
+        else:
+            logger.error(f"Unsupported media type: {media_type}")
+            return False
 
         confirmation_flag = False  # Initialize the confirmation flag
 
@@ -1520,7 +1494,7 @@ async def jellyseer_webhook(request: Request, background_tasks: BackgroundTasks)
     movie_or_tv_title = f"{media_details['title']} ({media_details['year']})"
     logger.info(f"Fetched {media_type.capitalize()} details: {movie_or_tv_title}")
 
-    background_tasks.add_task(add_request_to_queue, movie_or_tv_title, payload.extra)
+    background_tasks.add_task(add_request_to_queue, media_details['imdb_id'], movie_or_tv_title, media_type, payload.extra)
     logger.info(f"Returning response: {media_details['title']} ({media_details['year']})")
 
     return {"status": "success", "title": media_details['title'], "year": media_details['year']}
@@ -1614,6 +1588,10 @@ async def get_env_vars():
         "REFRESH_INTERVAL_MINUTES": REFRESH_INTERVAL_MINUTES if REFRESH_INTERVAL_MINUTES else "❌ Not Set",
         # URL check
         "OVERSEERR_BASE": "✅ Valid" if overseerr_base_status else "❌ Invalid",
+        # Max Movie Size
+        "MAX_MOVIE_SIZE": MAX_MOVIE_SIZE if MAX_MOVIE_SIZE else "60",
+        # Max Episode Size
+        "MAX_EPISODE_SIZE": MAX_EPISODE_SIZE if MAX_EPISODE_SIZE else "5",
     }
 
 # Main entry point for running the FastAPI server
