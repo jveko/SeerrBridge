@@ -25,6 +25,9 @@
 
 Simply put, I was too lazy to set up all of these other applications (arrs) and thought.... I want this instead.
 
+Example:
+
+![sb](https://github.com/user-attachments/assets/f4a9f1c9-5fa9-4fa5-b1e8-3ddc6a156a91)
 
 ---
 
@@ -371,7 +374,7 @@ This will launch a visible Chrome browser. Be sure not to mess with it while it'
 
 Example:
 
-![Seerr](https://github.com/user-attachments/assets/cc61cb67-0f64-4172-bc10-9f32021f697a)
+![sb](https://github.com/user-attachments/assets/c6a0ee1e-db07-430c-93cd-f282c8f0888f)
 
 ---
 
