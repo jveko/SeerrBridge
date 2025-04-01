@@ -31,6 +31,15 @@ Example:
 
 ---
 
+## ✨ Run SeerrBridge with ElfHosted 🚀
+
+Want to turbocharge your SeerrBridge setup without the DIY hassle? 🎉 Check out [ElfHosted](https://store.elfhosted.com/seerrbridge/elf/6929/)! They’ve got a slick, fully-managed option to run SeerrBridge standalone—perfect for auto-grabbing TV episodes 📺 with Overseerr and RealDebrid, no server wizardry needed! 🧙‍♂️
+
+Or, go big with their [Hobbit bundle](https://store.elfhosted.com/hobbit-jellyfin-realdebrid-seerrbridge/elf/6929/) 🎁: Jellyfin + RealDebrid + SeerrBridge, all pre-wired for you. Stream infinite episodes (yep, auto-grabs included! ⏰) with up to 2 HD or 1 4K stream 🌟—a turn-key media dream. Join the 100+ ⭐ stargazers loving SeerrBridge, hassle-free!
+
+
+---
+
 ## 📊 Flowchart (Rectangle of Life)
 
 ![image](https://github.com/user-attachments/assets/e6b1a4f2-8c69-40f9-92a8-e6e76e8e34e7)
