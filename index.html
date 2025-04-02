@@ -198,6 +198,10 @@
                 <span class="value" id="enable-automatic-background-task"></span>
             </div>
             <div class="env-var">
+                <label>ENABLE_SHOW_SUBSCRIPTION_TASK:</label>
+                <span class="value" id="enable-show-subscription-task"></span>
+            </div>
+            <div class="env-var">
                 <label>TORRENT_FILTER_REGEX:</label>
                 <span class="value" id="torrent-filter-regex"></span>
             </div>
@@ -234,6 +238,7 @@
             // Non-sensitive information
             document.getElementById('headless-mode').textContent = data.HEADLESS_MODE;
             document.getElementById('enable-automatic-background-task').textContent = data.ENABLE_AUTOMATIC_BACKGROUND_TASK;
+            document.getElementById('enable-show-subscription-task').textContent = data.ENABLE_SHOW_SUBSCRIPTION_TASK;
             document.getElementById('torrent-filter-regex').textContent = data.TORRENT_FILTER_REGEX;
             // Max Movie Size
             document.getElementById('max-movie-size').textContent = data.MAX_MOVIE_SIZE;
