@@ -19,7 +19,8 @@
 
 🌉 **SeerrBridge** is a browser automation tool that integrates [Jellyseer](https://github.com/Fallenbagel/jellyseerr)/[Overseerr](https://overseerr.dev/) with [Debrid Media Manager](https://github.com/debridmediamanager/debrid-media-manager). It listens to movie requests via Overseerr webhook. It automates the torrent search and download process using Debrid Media Manager via browser automation, which in turn, gets sent to Real-Debrid. This streamlines your media management, making it fast and efficient.
 
-🛠️ **Why SeerrBridge?** 
+<details>
+<summary>🛠️ Why SeerrBridge?</summary>
 
 **SeerrBridge** eliminates the need to set up multiple applications like [Radarr](https://radarr.video/), [Sonarr](https://sonarr.tv/), [Jackett](https://github.com/Jackett/Jackett), [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr), and other download clients. With SeerrBridge, you streamline your media management into one simple, automated process. No more juggling multiple tools—just request and download!
 
@@ -28,35 +29,48 @@ Simply put, I was too lazy to set up all of these other applications (arrs) and 
 Example:
 
 ![sb](https://github.com/user-attachments/assets/f4a9f1c9-5fa9-4fa5-b1e8-3ddc6a156a91)
+</details>
 
 ---
-
 ## ✨ Run SeerrBridge with ElfHosted 🚀
 
 Want to turbocharge your SeerrBridge setup without the DIY hassle? 🎉 Check out [ElfHosted](https://store.elfhosted.com/seerrbridge/elf/6929/)! They’ve got a slick, fully-managed option to run SeerrBridge standalone—perfect for auto-grabbing TV episodes 📺 with Overseerr and RealDebrid, no server wizardry needed! 🧙‍♂️
 
 Or, go big with their [Hobbit bundle](https://store.elfhosted.com/hobbit-jellyfin-realdebrid-seerrbridge/elf/6929/) 🎁: Jellyfin + RealDebrid + SeerrBridge, all pre-wired for you. Stream infinite episodes (yep, auto-grabs included! ⏰) with up to 2 HD or 1 4K stream 🌟—a turn-key media dream. Join the 100+ ⭐ stargazers loving SeerrBridge, hassle-free!
 
-
 ---
 
-## 📊 Flowchart (Rectangle of Life)
+<details>
+<summary>📊 Flowchart (Rectangle of Life)</summary>
 
 ![image](https://github.com/user-attachments/assets/e6b1a4f2-8c69-40f9-92a8-e6e76e8e34e7)
+</details>
 
----
 
-## 🔑 Key Features
+<details>
+<summary>🔑 Key Features</summary>
 
 - **Automated Movie Requests**: Automatically processes movie requests from Overseerr and fetches torrents from Debrid Media Manager.
-- **Debrid Media Manager Integration**: Uses DMM to automate (via browser) torrent search & downloads.
-- **Persistent Browser Session**: Keeps a browser session alive using Selenium, ensuring faster and more seamless automation.
-- **Queue Management**: Handles multiple requests with an asynchronous queue, ensuring smooth processing.
-- **Error Handling & Logging**: Provides comprehensive logging and error handling to ensure smooth operation.
-- **Setting Custom Regex / Filter in Settings**: Upon launch, the script with automate the addition of a regex filter which can be updated in code.
----
+  
+- **TV Show Subscriptions**: Subscribes to ongoing/currently airing TV shows and automatically tracks individual episode releases.
+  - Automatically fetches individual episodes when **complete season packs** are unavailable.
+  - Tracks previously missed or failed episodes and retries processing them.
+  - Continuously polls on a defined interval to automatically detect and fetch new episodes as they are released.
+  - Fully integrated with **Debrid Media Manager** and **Real-Debrid**.
 
-## 📊 Compatibility
+- **Debrid Media Manager Integration**: Uses DMM to automate (via browser) torrent search & downloads.
+  
+- **Persistent Browser Session**: Keeps a browser session alive using Selenium, ensuring faster and more seamless automation.
+  
+- **Queue Management**: Handles multiple requests with an asynchronous queue, ensuring smooth processing.
+  
+- **Error Handling & Logging**: Provides comprehensive logging and error handling to ensure smooth operation.
+  
+- **Setting Custom Regex / Filter in Settings**: Upon launch, the script automates the addition of a regex filter which can be updated in code.
+</details>
+
+<details>
+<summary>📊 Compatibility</summary>
 
 | Service        | Status | Notes                                |
 |----------------|--------|--------------------------------------|
@@ -69,12 +83,11 @@ Or, go big with their [Hobbit bundle](https://store.elfhosted.com/hobbit-jellyfi
 | **TorBox**| ❌      | Not Supported     |
 | **SuggestArr**| ✅      | Automatically grab related content and send to Jellyseerr/Overseerr      |
 | **Windows & Linux x86-64**| ✅      | Tested and working in both Windows & Linux environments      |
+</details>
 
----
-
+<details>
 ### (THIS SCRIPT IS STILL IN BETA)
-
-## ⚙ Requirements
+<summary>⚙ Requirements</summary>
 
 Before you can run this script, ensure that you have the following prerequisites:
 
@@ -187,10 +200,10 @@ TORRENT_FILTER_REGEX=^(?!.*【.*?】)(?!.*[\u0400-\u04FF])(?!.*\[esp\]).*
 MAX_MOVIE_SIZE=0
 MAX_EPISODE_SIZE=0
 ```
+</details>
 
----
-
-## 🛠️ Getting Started
+<details>
+<summary>🛠️ Getting Started</summary>
 
 ### Sending Notifications to SeerrBridge from Jellyseerr / Overseerr
 
@@ -354,10 +367,10 @@ docker network connect overseerr abc123
 ---
 
 That's it! Your **SeerrBridge** container should now be up and running. 🚀
+</details>
 
----
-
-## 🛤️ Roadmap
+<details>
+<summary>🛤️ Roadmap</summary>
 
 - [ ] **Faster Processing**: Implement concurrency to handle multiple requests simultaneously.
 - [x] **TV Show Support**: Extend functionality to handle TV series and episodes.
@@ -365,10 +378,10 @@ That's it! Your **SeerrBridge** container should now be up and running. 🚀
 - [x] **Jellyseer/Overseer API Integration**: Direct integration with Jellyseer/Overseer API for smoother automation and control.
 - [x] **Title Parsing**: Ensure torrent titles/names are properly matched and handle different languages.
 - [x] **Docker Support**: Allow for Docker / Compose container.
+</details>
 
----
-
-## 🔍 How It Works
+<details>
+<summary>🔍 How It Works</summary>
 
 1. **Seerr Webhook**: SeerrBridge listens for movie requests via the configured webhook.
 2. **Automated Search**: It uses Selenium to automate the search for movies on Debrid Media Manager site.
@@ -384,10 +397,31 @@ This will launch a visible Chrome browser. Be sure not to mess with it while it'
 Example:
 
 ![sb](https://github.com/user-attachments/assets/c6a0ee1e-db07-430c-93cd-f282c8f0888f)
+</details>
 
----
+<details>
+<summary>📺 TV Show Subscription Feature</summary>
 
-## 📁 Movie and Show File Sizes
+SeerrBridge now includes an exciting **TV Show Subscription** feature that enhances its functionality for ongoing and currently airing TV shows! With this new addition, SeerrBridge takes automated media fetching to the next level:
+
+### 🔧 How It Works:
+- **Episode-Level Automation**: Automatically tracks and fetches **individual episodes** for ongoing TV shows, especially when a **complete season pack** is unavailable.
+- **Smart Subscription System**:
+    - Tracks currently airing episodes and **checks for new releases on a defined interval**.
+    - Handles previously **missed or failed episode downloads**, ensuring nothing gets left behind.
+- **Seamless Integration**: Works flawlessly with **Debrid Media Manager** and **Real-Debrid**, providing uninterrupted automation and caching requested episodes instantly when available.
+- **Fully Automated**: Once subscribed to a show, SeerrBridge manages all episodes for you. No need to manually check for new episodes!
+
+### 🌟 Key Benefits:
+- **Never Miss an Episode**: Perfect for keeping up with currently airing shows where season packs are rare or unavailable during release cycles.
+- **Optimized for Real-Debrid**: Ensures episodes are downloaded as soon as torrents are cached and accessible in your debrid account.
+- **Retry Mechanism**: Any failed episode attempts are logged and automatically retried during the next interval check.
+
+🎉 **This feature ensures you stay up to date on your favorite series—all fully automated!**
+</details>
+
+<details>
+<summary>📁 Movie and Show File Sizes</summary>
 
 For movies, possible values are: 
 | Value | Description |
@@ -410,8 +444,10 @@ For episodes, possible values are:
 |1|1 GB **(Default)**|
 |3|3 GB|
 |5|5 GB|
+</details>
 
-## 🎯 Custom Regex Filtering
+<details>
+<summary>🎯 Custom Regex Filtering</summary>
 
 This script includes support for **custom regex filtering**, allowing you to filter out unwanted items and refine the results based on specific patterns. The regex is automatically added when the script runs, and you can customize it directly in the code.
 
@@ -520,8 +556,8 @@ Below is a categorized list of regex patterns for different filtering possibilit
 ---
 
 By selecting one of these patterns, you can tailor the regex filter to fit your exact needs.
+</details>
 
----
 
 ## 📞 Contact
 
@@ -540,20 +576,13 @@ We welcome contributions! Here’s how you can help:
 
 ---
 
-## 💰 Donations
+## 💰 Support SeerrBridge's Development
 
-If you find SeerrBridge useful and would like to support its development, consider making a donation:
+If you find SeerrBridge useful and would like to support its development, consider becoming a sponsor:
 
-- BTC (Bitcoin): `bc1qxjpfszwvy3ty33weu6tjkr394uq30jwkysp4x0`
-- ETH (Ethereum): `0xAF3ADE79B7304784049D200ea50352D1C717d7f2`
+➡️ [Sponsor us on GitHub](https://github.com/sponsors/Woahai321)
 
 Thank you for your support!
-
----
-
-## 📄 License
-
-This project is licensed under the [MIT License](https://opensource.org/licenses/MIT).
 
 ---
 
@@ -590,7 +619,15 @@ This project is licensed under the [MIT License](https://opensource.org/licenses
 <!-- ALL-CONTRIBUTORS-LIST:END -->
 
 ---
-## 📜 Legal Disclaimer
+
+## 📄 License
+
+This project is licensed under the [MIT License](https://opensource.org/licenses/MIT).
+
+---
+
+<details>
+<summary>📜 Legal Disclaimer</summary>
 
 This repository and the accompanying software are intended **for educational purposes only**. The creators and contributors of this project do not condone or encourage the use of this tool for any illegal activities, including but not limited to copyright infringement, illegal downloading, or torrenting copyrighted content without proper authorization.
 
@@ -606,4 +643,4 @@ This repository and the accompanying software are intended **for educational pur
 This tool is provided as-is, for **educational purposes**, and to help users automate the management of their own legally obtained media. It is **not intended** to be used for pirating or distributing copyrighted material without permission.
 
 If you are unsure about the legality of your actions, you should consult with a legal professional before using this software.
-
+</details>
