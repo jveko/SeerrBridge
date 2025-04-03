@@ -148,6 +148,13 @@ Ensure your JSON payload is the following
 }
 ```
 
+Notification Types should also be set to "Request Automatically Approved", and your user should be set to automatic approvals.
+
+![image](https://github.com/user-attachments/assets/46df5e43-b9c3-48c9-aa22-223c6720ca15)
+
+![image](https://github.com/user-attachments/assets/ae25b2f2-ac80-4c96-89f2-c47fc936debe)
+
+
 ### 2. **Real-Debrid Account**
    - You will need a valid [Real-Debrid](https://real-debrid.com/) account to authenticate and interact with the Debrid Media Manager.
      - The Debrid Media Manager Access token, Client ID, Client Secret, & Refresh Tokens are used and should be set within your .env file. Grab this from your browser via Inspect > 
