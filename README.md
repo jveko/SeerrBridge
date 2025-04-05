@@ -238,7 +238,59 @@ Configure your webhook as mentioned above so SeerrBridge can ingest and process 
 
 ### 🐳 Docker Support
 
-#### Option 1: Using Docker Compose
+#### Option 1: Using Docker Pull
+
+## Prerequisites
+- Docker installed on your system.
+- A `.env` file in your current directory with the required environment variables.
+
+    Example `.env`:
+    ```bash
+    RD_ACCESS_TOKEN={"value":"YOUR_TOKEN","expiry":123456789}
+    RD_REFRESH_TOKEN=YOUR_REFRESH_TOKEN
+    RD_CLIENT_ID=YOUR_CLIENT_ID
+    RD_CLIENT_SECRET=YOUR_CLIENT_SECRET
+    TRAKT_API_KEY=YOUR_TRAKT_TOKEN
+    OVERSEERR_API_KEY=YOUR_OVERSEERR_TOKEN
+    OVERSEERR_BASE=https://YOUR_OVERSEERR_URL.COM
+    HEADLESS_MODE=true
+    ENABLE_AUTOMATIC_BACKGROUND_TASK=true
+    ENABLE_SHOW_SUBSCRIPTION_TASK=true
+    REFRESH_INTERVAL_MINUTES=120
+    TORRENT_FILTER_REGEX=^(?!.*【.*?】)(?!.*[\u0400-\u04FF])(?!.*\[esp\]).*
+    MAX_MOVIE_SIZE=0
+    MAX_EPISODE_SIZE=0
+    ```
+
+1. Pull the Image
+
+    ```bash
+    docker pull ghcr.io/woahai321/seerrbridge:latest
+    ```
+
+2. Run the container
+
+    Linux
+
+    ```bash
+    docker run -d \
+        --env-file .env \
+        -v $(pwd)/.env:/app/.env \
+        -p 8777:8777 \
+        ghcr.io/woahai321/seerrbridge:latest
+    ```
+
+    Windows Powershell
+
+    ```bash
+    docker run -d `
+        --env-file .env `
+        -v "$(${PWD})/.env:/app/.env" `
+        -p 8777:8777 `
+        ghcr.io/woahai321/seerrbridge:latest
+    ```
+
+#### Option 2: Using Docker Compose
 
 1. Clone the repository:
     ```bash
@@ -265,8 +317,8 @@ Configure your webhook as mentioned above so SeerrBridge can ingest and process 
     ENABLE_SHOW_SUBSCRIPTION_TASK=true
     REFRESH_INTERVAL_MINUTES=120
     TORRENT_FILTER_REGEX=^(?!.*【.*?】)(?!.*[\u0400-\u04FF])(?!.*\[esp\]).*
-    MAX_MOVIE_SIZE=5
-    MAX_EPISODE_SIZE=1
+    MAX_MOVIE_SIZE=0
+    MAX_EPISODE_SIZE=0
     ```
 
 3. Start the container:
@@ -279,7 +331,7 @@ Configure your webhook as mentioned above so SeerrBridge can ingest and process 
 
 ---
 
-#### Option 2: Using Docker Run
+#### Option 3: Using Docker Run
 
 Skip Compose and run the container directly:
 
