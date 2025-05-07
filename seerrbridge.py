@@ -1,5 +1,5 @@
 # =============================================================================
-# Soluify.com  |  Your #1 IT Problem Solver  |  {SeerrBridge v0.5}
+# Soluify.com  |  Your #1 IT Problem Solver  |  {SeerrBridge v0.5.1}
 # =============================================================================
 #  __         _
 # (_  _ |   .(_
@@ -32,7 +32,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from dotenv import load_dotenv
 from selenium.common.exceptions import StaleElementReferenceException, NoSuchElementException, TimeoutException
 from asyncio import Queue
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from deep_translator import GoogleTranslator
 from fuzzywuzzy import fuzz
 from loguru import logger
@@ -538,6 +538,42 @@ def replace_words_with_numbers(title):
         title = re.sub(rf'\b{word}\b', digit, title, flags=re.IGNORECASE)
     return title
 
+def click_show_more_results(driver, logger, max_attempts=3, wait_between=3, initial_timeout=5, subsequent_timeout=5):
+    """
+    Attempts to click the 'Show More Results' button multiple times with waits in between.
+    
+    Args:
+        driver: The WebDriver instance
+        logger: Logger instance for logging events
+        max_attempts: Number of times to try clicking the button (default: 2)
+        wait_between: Seconds to wait between clicks (default: 3)
+        initial_timeout: Initial timeout in seconds for first click (default: 5)
+        subsequent_timeout: Timeout in seconds for subsequent clicks (default: 5)
+    """
+    for attempt in range(max_attempts):
+        try:
+            # Adjust timeout based on whether it's the first attempt
+            timeout = initial_timeout if attempt == 0 else subsequent_timeout
+            
+            # Locate and click the button
+            show_more_button = WebDriverWait(driver, timeout).until(
+                EC.element_to_be_clickable((By.XPATH, "//button[contains(@class, 'haptic') and contains(text(), 'Show More Results')]"))
+            )
+            show_more_button.click()
+            logger.info(f"Clicked 'Show More Results' button ({attempt + 1}{'st' if attempt == 0 else 'nd/th'} time).")
+            
+            # Wait between clicks if not the last attempt
+            if attempt < max_attempts - 1:
+                time.sleep(wait_between)
+                
+            time.sleep(2)    
+        except TimeoutException:
+            logger.info(f"No 'Show More Results' button found for {attempt + 1}{'st' if attempt == 0 else 'nd/th'} click after {timeout} seconds. Proceeding anyway.")
+            break  # Exit the loop if we can't find the button
+        except Exception as e:
+            logger.warning(f"Error clicking 'Show More Results' button on attempt {attempt + 1}: {e}. Proceeding anyway.")
+            break  # Exit on other errors too
+
 # Function to fetch media requests from Overseerr
 def get_overseerr_media_requests() -> list[dict]:
     url = f"{OVERSEERR_API_BASE_URL}/request?take=500&filter=approved&sort=added"
@@ -754,6 +790,16 @@ async def process_movie_requests():
                     
                     # Check for discrepancy between episode_count and aired_episodes
                     if episode_count != aired_episodes:
+                        # Only check for the next episode if there's a discrepancy
+                        has_aired, next_episode_details = check_next_episode_aired(
+                            str(trakt_show_id), season_number, aired_episodes
+                        )
+                        if has_aired:
+                            logger.info(f"Next episode (E{aired_episodes + 1:02d}) has aired for {media_title} Season {season_number}. Updating aired_episodes.")
+                            season_details['aired_episodes'] = aired_episodes + 1
+                        else:
+                            logger.info(f"Next episode (E{aired_episodes + 1:02d}) has not aired for {media_title} Season {season_number}.")
+                        
                         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                         # Create list of all episodes marked as failed with "E01", "E02", etc.
                         failed_episodes = [
@@ -781,6 +827,8 @@ async def process_movie_requests():
                         logger.info(f"Found episode count discrepancy for {media_title} Season {season_number}. Added to {DISCREPANCY_REPO_FILE} with all episodes marked as failed")
                         discrepant_shows.add((media_title, season_number))
                         has_discrepancy = True
+                    else:
+                        logger.info(f"No episode count discrepancy for {media_title} Season {season_number}. Skipping next episode check.")
 
         # If it's a TV show with any discrepancies (new or existing), skip full processing
         if media_type == 'tv' and has_discrepancy:
@@ -1161,32 +1209,12 @@ def search_individual_episodes(imdb_id, movie_title, season_number, season_detai
             filter_input.send_keys(full_filter)
             logger.info(f"Applied filter: {full_filter}")
             
-            # Click the "Show More Results" button twice with a 3-second wait in between
             try:
-                # Locate and click the button the first time
-                show_more_button = WebDriverWait(driver, 10).until(
-                    EC.element_to_be_clickable((By.XPATH, "//button[contains(@class, 'haptic') and contains(text(), 'Show More Results')]"))
-                )
-                show_more_button.click()
-                logger.info("Clicked 'Show More Results' button (1st time).")
-                
-                # Wait 3 seconds for the page to update
-                time.sleep(3)
-                
-                # Re-locate the button before the second click
-                try:
-                    show_more_button = WebDriverWait(driver, 5).until(
-                        EC.element_to_be_clickable((By.XPATH, "//button[contains(@class, 'haptic') and contains(text(), 'Show More Results')]"))
-                    )
-                    show_more_button.click()
-                    logger.info("Clicked 'Show More Results' button (2nd time).")
-                except TimeoutException:
-                    logger.info("No 'Show More Results' button found for 2nd click after 5 seconds. Proceeding anyway.")
-                    
+                click_show_more_results(driver, logger)
             except TimeoutException:
-                logger.warning("Could not find or click 'Show More Results' button within initial 10-second timeout. Proceeding anyway.")
+                logger.warning("Timed out while trying to click 'Show More Results'")
             except Exception as e:
-                logger.warning(f"Error clicking 'Show More Results' button: {e}. Proceeding anyway.")
+                logger.error(f"Unexpected error in click_show_more_results: {e}")
 
             
             # Wait for results to update after applying the filter
@@ -1493,6 +1521,14 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None):
                                 logger.success(f"Red button confirmed for {season}. Skipping further processing for this season.")
                                 continue
                                 
+                            try:
+                                click_show_more_results(driver, logger)
+                            except TimeoutException:
+                                logger.warning("Timed out while trying to click 'Show More Results'")
+                            except Exception as e:
+                                logger.error(f"Unexpected error in click_show_more_results: {e}")
+                                continue  
+                                
                             # Re-locate the result boxes after navigating to the new URL
                             try:
                                 result_boxes = WebDriverWait(driver, 10).until(
@@ -1501,7 +1537,7 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None):
                             except TimeoutException:
                                 logger.warning(f"No result boxes found for season {season}. Skipping.")
                                 continue
-
+                                
                             # Now process the result boxes for the current season
                             for i, result_box in enumerate(result_boxes, start=1):
                                 try:
@@ -1796,11 +1832,109 @@ async def get_user_input():
         print("No input received (EOFError). Defaulting to 'n'.")
         return 'n'
 
+def check_next_episode_aired(trakt_show_id: str, season_number: int, current_aired_episodes: int) -> tuple[bool, Optional[dict]]:
+    """
+    Check if the next episode (current_aired_episodes + 1) has aired for a given show and season.
+    
+    Args:
+        trakt_show_id (str): The Trakt ID of the show
+        season_number (int): The season number to check
+        current_aired_episodes (int): The current number of aired episodes in the season
+    
+    Returns:
+        tuple[bool, Optional[dict]]: (has_aired, episode_details)
+            - has_aired: True if the next episode has aired, False otherwise
+            - episode_details: Episode details if the episode exists, None otherwise
+    """
+    global trakt_api_calls, last_reset_time
+
+    logger.debug(f"Starting check_next_episode_aired with trakt_show_id={trakt_show_id}, season_number={season_number}, current_aired_episodes={current_aired_episodes}")
+
+    # Validate input parameters
+    if not trakt_show_id or not isinstance(trakt_show_id, str):
+        logger.error(f"Invalid trakt_show_id provided: {trakt_show_id}")
+        return False, None
+    if not isinstance(season_number, int) or season_number < 0:
+        logger.error(f"Invalid season_number provided: {season_number}")
+        return False, None
+    if not isinstance(current_aired_episodes, int) or current_aired_episodes < 0:
+        logger.error(f"Invalid current_aired_episodes provided: {current_aired_episodes}")
+        return False, None
+
+    current_time = time.time()
+    logger.debug(f"Current time: {current_time}, Last reset time: {last_reset_time}")
+
+    if current_time - last_reset_time >= TRAKT_RATE_LIMIT_PERIOD:
+        logger.debug("Rate limit period expired. Resetting API call counter.")
+        trakt_api_calls = 0
+        last_reset_time = current_time
+
+    if trakt_api_calls >= TRAKT_RATE_LIMIT:
+        wait_time = TRAKT_RATE_LIMIT_PERIOD - (current_time - last_reset_time)
+        logger.warning(f"Trakt API rate limit reached. Sleeping for {wait_time} seconds.")
+        time.sleep(wait_time)
+        trakt_api_calls = 0
+        last_reset_time = time.time()
+        logger.debug("Woke up from sleep. Reset API call counter.")
+
+    next_episode_number = current_aired_episodes + 1
+    url = f"https://api.trakt.tv/shows/{trakt_show_id}/seasons/{season_number}/episodes/{next_episode_number}?extended=full"
+    headers = {
+        "Content-type": "application/json",
+        "trakt-api-key": TRAKT_API_KEY,
+        "trakt-api-version": "2"
+    }
+
+    logger.debug(f"Sending GET request to {url} with headers {headers}")
+
+    try:
+        logger.info(f"Fetching next episode details for show ID {trakt_show_id}, season {season_number}, episode {next_episode_number}")
+        response = requests.get(url, headers=headers, timeout=10)
+        trakt_api_calls += 1
+        logger.debug(f"Received response with status code {response.status_code}")
+
+        if response.status_code == 200:
+            episode_data = response.json()
+            logger.debug(f"Next episode data: {episode_data}")
+
+            first_aired = episode_data.get('first_aired')
+            logger.debug(f"Next episode first_aired: {first_aired}")
+
+            if first_aired:
+                try:
+                    first_aired_datetime = datetime.fromisoformat(first_aired.replace('Z', '+00:00'))
+                    current_utc_time = datetime.now(timezone.utc)
+                    logger.debug(f"Parsed first_aired_datetime: {first_aired_datetime}, current_utc_time: {current_utc_time}")
+
+                    if current_utc_time >= first_aired_datetime:
+                        logger.info(f"Episode {next_episode_number} has aired for show ID {trakt_show_id}, season {season_number}")
+                        return True, episode_data
+                    else:
+                        logger.info(f"Episode {next_episode_number} has not aired yet for show ID {trakt_show_id}, season {season_number}")
+                        return False, episode_data
+                except ValueError as e:
+                    logger.error(f"Invalid first_aired format for episode {next_episode_number}: {e}")
+                    return False, episode_data
+            else:
+                logger.warning(f"Episode {next_episode_number} missing 'first_aired' field for show ID {trakt_show_id}, season {season_number}")
+                return False, episode_data
+
+        elif response.status_code == 404:
+            logger.info(f"Episode {next_episode_number} does not exist yet for show ID {trakt_show_id}, season {season_number}")
+            return False, None
+        else:
+            logger.warning(f"Failed to fetch next episode details for show ID {trakt_show_id}, season {season_number}, episode {next_episode_number}: Status code {response.status_code}")
+            return False, None
+
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Error fetching next episode details from Trakt API for show ID {trakt_show_id}, season {season_number}, episode {next_episode_number}: {e}")
+        return False, None
+
 async def check_show_subscriptions():
     """
     Recurring task to check for new episodes in subscribed shows listed in episode_discrepancies.json.
     Updates the JSON file with the latest aired episode counts and processes new episodes if found.
-    Also reattempts processing of previously failed episodes.
+    Also reattempts processing of previously failed episodes and checks for the next episode if there's a discrepancy.
     """
     logger.info("Starting show subscription check...")
 
@@ -1847,7 +1981,22 @@ async def check_show_subscriptions():
             continue
 
         current_aired_episodes = latest_season_details.get("aired_episodes", 0)
-        logger.info(f"Previous aired episodes: {previous_aired_episodes}, Current aired episodes: {current_aired_episodes}")
+        episode_count = latest_season_details.get("episode_count", 0)
+        logger.info(f"Previous aired episodes: {previous_aired_episodes}, Current aired episodes: {current_aired_episodes}, Episode count: {episode_count}")
+
+        # Only check for the next episode if there's a discrepancy
+        if episode_count != current_aired_episodes:
+            has_aired, next_episode_details = check_next_episode_aired(
+                str(trakt_show_id), season_number, current_aired_episodes
+            )
+            if has_aired:
+                logger.info(f"Next episode (E{current_aired_episodes + 1:02d}) has aired for {show_title} Season {season_number}. Updating aired_episodes.")
+                latest_season_details['aired_episodes'] = current_aired_episodes + 1
+                current_aired_episodes += 1
+            else:
+                logger.info(f"Next episode (E{current_aired_episodes + 1:02d}) has not aired for {show_title} Season {season_number}.")
+        else:
+            logger.info(f"No episode count discrepancy for {show_title} Season {season_number}. Skipping next episode check.")
 
         # Update the season details in the discrepancy entry
         discrepancy["season_details"] = latest_season_details
@@ -1913,32 +2062,12 @@ async def check_show_subscriptions():
                 filter_input.send_keys(full_filter)
                 logger.info(f"Applied filter: {full_filter}")
 
-                # Click the "Show More Results" button twice with a 3-second wait in between
                 try:
-                    # Locate and click the button the first time
-                    show_more_button = WebDriverWait(driver, 10).until(
-                        EC.element_to_be_clickable((By.XPATH, "//button[contains(@class, 'haptic') and contains(text(), 'Show More Results')]"))
-                    )
-                    show_more_button.click()
-                    logger.info("Clicked 'Show More Results' button (1st time).")
-                    
-                    # Wait 3 seconds for the page to update
-                    time.sleep(3)
-                    
-                    # Re-locate the button before the second click
-                    try:
-                        show_more_button = WebDriverWait(driver, 5).until(
-                            EC.element_to_be_clickable((By.XPATH, "//button[contains(@class, 'haptic') and contains(text(), 'Show More Results')]"))
-                        )
-                        show_more_button.click()
-                        logger.info("Clicked 'Show More Results' button (2nd time).")
-                    except TimeoutException:
-                        logger.info("No 'Show More Results' button found for 2nd click after 5 seconds. Proceeding anyway.")
-                        
+                    click_show_more_results(driver, logger)
                 except TimeoutException:
-                    logger.warning("Could not find or click 'Show More Results' button within initial 10-second timeout. Proceeding anyway.")
+                    logger.warning("Timed out while trying to click 'Show More Results'")
                 except Exception as e:
-                    logger.warning(f"Error clicking 'Show More Results' button: {e}. Proceeding anyway.")
+                    logger.error(f"Unexpected error in click_show_more_results: {e}")
 
                 # Wait for results to update
                 time.sleep(2)
@@ -2102,7 +2231,21 @@ async def jellyseer_webhook(request: Request, background_tasks: BackgroundTasks)
                 
                 if season_details:
                     # Check for episode count discrepancy
-                    if season_details.get('episode_count') != season_details.get('aired_episodes'):
+                    episode_count = season_details.get('episode_count', 0)
+                    aired_episodes = season_details.get('aired_episodes', 0)
+                    logger.info(f"Season {season_number} details: episode_count={episode_count}, aired_episodes={aired_episodes}")
+
+                    if episode_count != aired_episodes:
+                        # Only check for the next episode if there's a discrepancy
+                        has_aired, next_episode_details = check_next_episode_aired(
+                            str(trakt_show_id), season_number, aired_episodes
+                        )
+                        if has_aired:
+                            logger.info(f"Next episode (E{aired_episodes + 1:02d}) has aired for {movie_or_tv_title} Season {season_number}. Updating aired_episodes.")
+                            season_details['aired_episodes'] = aired_episodes + 1
+                        else:
+                            logger.info(f"Next episode (E{aired_episodes + 1:02d}) has not aired for {movie_or_tv_title} Season {season_number}.")
+
                         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                         
                         discrepancy_entry = {
@@ -2131,6 +2274,8 @@ async def jellyseer_webhook(request: Request, background_tasks: BackgroundTasks)
                             logger.info(f"Found episode count discrepancy for {movie_or_tv_title} Season {season_number}. Added to repository {DISCREPANCY_REPO_FILE}")
                         else:
                             logger.info(f"Episode count discrepancy for {movie_or_tv_title} Season {season_number} already exists in repository")
+                    else:
+                        logger.info(f"No episode count discrepancy for {movie_or_tv_title} Season {season_number}. Skipping next episode check.")
 
     # Add request to queue for further processing
     background_tasks.add_task(add_request_to_queue, media_details['imdb_id'], movie_or_tv_title, media_type, payload.extra)
