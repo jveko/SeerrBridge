@@ -35,6 +35,15 @@
         "code",
         "ideas"
       ]
+    },
+    {
+      "login": "funkypenguin",
+      "name": "David Young",
+      "avatar_url": "https://avatars.githubusercontent.com/u/1524686?v=4",
+      "profile": "https://www.funkypenguin.co.nz",
+      "contributions": [
+        "doc"
+      ]
     }
   ],
   "contributorsPerLine": 7,
