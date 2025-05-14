@@ -40,15 +40,15 @@ Example:
 > [!IMPORTANT]
 > **ElfHosted 💜 SeerrBridge & ListSync!**
 >
-> SeerrBridge and its awesome companion ListSync are fully supported and integrated into the ElfHosted ecosystem! While they're being added to the main [ElfHosted app catalogue](https://store.elfhosted.com/elf/6929/), you can already get them pre-configured in the bundles below.
+> SeerrBridge and its awesome companion ListSync are fully supported and integrated into the ElfHosted ecosystem, you can already get them pre-configured in the bundles below, with a $1, 7-day trial!
 
 > [!TIP]
-> **ElfHosted "Hobbit" Bundles: Your Turn-Key Streaming Powerhouse!** 💹
+> **ElfHosted Streaming Bundles: Your Turn-Key Streaming Powerhouse!** 💹
 >
-> Want SeerrBridge without the DIY setup? 🎉 These ElfHosted "Hobbit" bundles come pre-wired with RealDebrid and your choice of media server. Get the ultimate hassle-free, automated infinite streaming experience:
-> *   [Hobbit: [Jellyfin + RealDebrid + SeerrBridge + ListSync]](https://store.elfhosted.com/product/hobbit-jellyfin-realdebrid-seerrbridge/elf/6929/) (*Sync & Stream with Jellyfin, fully automated!*)
-> *   [Hobbit: [Plex + RealDebrid + SeerrBridge + ListSync]](https://store.elfhosted.com/product/hobbit-plex-realdebrid-seerrbridge/elf/6929/) (*Turbocharge your Plex library management!*)
-> *   [Hobbit: [Emby + RealDebrid + SeerrBridge + ListSync]](https://store.elfhosted.com/product/hobbit-emby-realdebrid-seerrbridge/elf/6929/) (*Unlock seamless syncing for your Emby setup!*)
+> Want SeerrBridge without the DIY setup? 🎉 These ElfHosted bundles come pre-wired with RealDebrid, SeerrBridge and ListSync, and your choice of media server. Get the ultimate hassle-free, automated infinite streaming experience:
+> * [Starter](https://store.elfhosted.com/product/hobbit/elf/6929/)  Personal Media Streamer [2xHD / 1x4K, contented]
+> * [Hobbit](https://store.elfhosted.com/product/starter/elf/6929/) Personal Media Streamer [4xHD / 2x4K, semi-dedicated]
+> * [Ranger](https://store.elfhosted.com/product/ranger/elf/6929/) Personal Media Streamer [8xHD / 4x4K, semi-dedicated]
 
 ---
 
