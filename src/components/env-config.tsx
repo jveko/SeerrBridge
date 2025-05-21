@@ -395,6 +395,30 @@ export function EnvConfig() {
       
       setSuccess("Environment variables saved successfully. You must restart SeerrBridge to apply the changes.");
       
+      // Notify SeerrBridge about the environment changes
+      try {
+        // Use the same API route pattern that bridge-status uses
+        // This ensures it works in both Docker and local environments
+        const reloadResponse = await fetch("/api/bridge-reload", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          }
+        });
+        
+        if (reloadResponse.ok) {
+          const reloadData = await reloadResponse.json();
+          console.log("SeerrBridge environment reload triggered successfully:", reloadData);
+          setSuccess("Environment variables saved and applied to SeerrBridge successfully.");
+        } else {
+          console.error("Failed to trigger SeerrBridge environment reload");
+          setSuccess("Environment variables saved. You may need to restart SeerrBridge manually to apply the changes.");
+        }
+      } catch (error) {
+        console.error("Error triggering SeerrBridge environment reload:", error);
+        setSuccess("Environment variables saved. Connection to SeerrBridge failed, manual restart may be required.");
+      }
+	  
       // Refresh the page to apply the changes
       router.refresh();
     } catch (err) {
