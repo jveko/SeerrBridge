@@ -68,8 +68,13 @@ MAX_EPISODE_SIZE = os.getenv("MAX_EPISODE_SIZE")
 # Confirm the interval is a valid number.
 try:
     REFRESH_INTERVAL_MINUTES = float(os.getenv("REFRESH_INTERVAL_MINUTES"))
+    min_interval = 1.0  # Minimum interval in minutes
+    if REFRESH_INTERVAL_MINUTES < min_interval:
+        logger.warning(f"REFRESH_INTERVAL_MINUTES ({REFRESH_INTERVAL_MINUTES}) is too small. Setting to minimum interval of {min_interval} minutes.")
+        REFRESH_INTERVAL_MINUTES = min_interval
 except (TypeError, ValueError):
-    logger.error("REFRESH_INTERVAL_MINUTES environment variable is not a valid number.")
+    logger.error("REFRESH_INTERVAL_MINUTES environment variable is not a valid number. Using default of 60 minutes.")
+    REFRESH_INTERVAL_MINUTES = 60.0
     exit(1)
 
 if not OVERSEERR_API_BASE_URL:
@@ -851,7 +856,8 @@ async def process_movie_requests():
             logger.critical(f"Error processing {media_type} request {media_title}: {ex}")
 
     logger.info("Finished processing all current requests. Waiting for new requests.")
-
+    schedule_recheck_movie_requests()
+  
 def mark_completed(media_id: int, tmdb_id: int) -> bool:
     """Mark item as completed in overseerr"""
     url = f"{OVERSEERR_API_BASE_URL}/media/{media_id}/available"
@@ -2432,9 +2438,34 @@ async def jellyseer_webhook(request: Request, background_tasks: BackgroundTasks)
     return {"status": "success", "title": media_details['title'], "year": media_details['year']}
 
 def schedule_recheck_movie_requests():
-    # Correctly schedule the job with the REFRESH_INTERVAL_MINUTES configured interval.
-    scheduler.add_job(process_movie_requests, 'interval', minutes=REFRESH_INTERVAL_MINUTES)
-    logger.info(f"Scheduled rechecking movie requests every {REFRESH_INTERVAL_MINUTES} minute(s).")
+    """Schedule or reschedule the movie requests recheck job, replacing any existing job."""
+    # Validate REFRESH_INTERVAL_MINUTES
+    min_interval = 1.0  # Minimum interval in minutes
+    if REFRESH_INTERVAL_MINUTES < min_interval:
+        logger.warning(f"REFRESH_INTERVAL_MINUTES ({REFRESH_INTERVAL_MINUTES}) is too small. Using minimum interval of {min_interval} minutes.")
+        interval = min_interval
+    else:
+        interval = REFRESH_INTERVAL_MINUTES
+
+    try:
+        # Remove all existing jobs with the same ID
+        for job in scheduler.get_jobs():
+            if job.id == "process_movie_requests":
+                scheduler.remove_job(job.id)
+                logger.info("Removed existing job with ID: process_movie_requests")
+
+        # Schedule the new job with a unique ID
+        scheduler.add_job(
+            process_movie_requests,
+            'interval',
+            minutes=interval,
+            id="process_movie_requests",
+            replace_existing=True,
+            max_instances=1  # Explicitly set to avoid unexpected concurrency
+        )
+        logger.info(f"Scheduled rechecking movie requests every {interval} minute(s).")
+    except Exception as e:
+        logger.error(f"Error scheduling movie requests recheck: {e}")
 
 async def on_close():
     await shutdown_browser()  # Ensure browser is closed when the bot closes
@@ -2581,20 +2612,42 @@ async def reload_environment():
         # Update scheduler if refresh interval changed
         if "REFRESH_INTERVAL_MINUTES" in changes and scheduler and scheduler.running:
             logger.info(f"Updating scheduler intervals to {REFRESH_INTERVAL_MINUTES} minutes")
+            min_interval = 1.0  # Minimum interval in minutes
+            if REFRESH_INTERVAL_MINUTES < min_interval:
+                logger.warning(f"REFRESH_INTERVAL_MINUTES ({REFRESH_INTERVAL_MINUTES}) is too small. Using minimum interval of {min_interval} minutes.")
+                interval = min_interval
+            else:
+                interval = REFRESH_INTERVAL_MINUTES
+        
             try:
-                # Remove existing jobs
+                # Remove all existing jobs for both tasks
                 for job in scheduler.get_jobs():
-                    if job.id and ("check_show_subscriptions" in job.id or "process_movie_requests" in job.id):
+                    if job.id in ["check_show_subscriptions", "process_movie_requests"]:
                         scheduler.remove_job(job.id)
-                
+                        logger.info(f"Removed existing job with ID: {job.id}")
+        
                 # Re-add jobs with new interval
                 if ENABLE_AUTOMATIC_BACKGROUND_TASK:
-                    scheduler.add_job(process_movie_requests, 'interval', minutes=REFRESH_INTERVAL_MINUTES)
-                    logger.info(f"Rescheduled movie requests check every {REFRESH_INTERVAL_MINUTES} minute(s)")
-                
+                    scheduler.add_job(
+                        process_movie_requests,
+                        'interval',
+                        minutes=interval,
+                        id="process_movie_requests",
+                        replace_existing=True,
+                        max_instances=1
+                    )
+                    logger.info(f"Rescheduled movie requests check every {interval} minute(s)")
+        
                 if ENABLE_SHOW_SUBSCRIPTION_TASK:
-                    scheduler.add_job(check_show_subscriptions, 'interval', minutes=REFRESH_INTERVAL_MINUTES)
-                    logger.info(f"Rescheduled show subscription check every {REFRESH_INTERVAL_MINUTES} minute(s)")
+                    scheduler.add_job(
+                        check_show_subscriptions,
+                        'interval',
+                        minutes=interval,
+                        id="check_show_subscriptions",
+                        replace_existing=True,
+                        max_instances=1
+                    )
+                    logger.info(f"Rescheduled show subscription check every {interval} minute(s)")
             except Exception as e:
                 logger.error(f"Error updating scheduler: {e}")
     else:
