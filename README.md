@@ -82,6 +82,28 @@ Example:
 </details>
 
 <details>
+<summary>🌉 BridgeBoard (SeerrBridge Dashboard) - NEW FEATURE🌟</summary>
+
+## What is BridgeBoard?
+
+BridgeBoard is a sleek, modern web dashboard that complements the SeerrBridge application, providing a visual interface to monitor and manage your media automation:
+![image](https://github.com/user-attachments/assets/0f49edb0-0ade-4c40-9dbd-3c65d542091b)
+
+- **Status Monitoring**: View the current status of SeerrBridge and your movie / TV show requests.
+- **TV Show Subscription Tracking**: Monitor your subscribed shows, their episode status, and unsubscribe.
+- **Log Configurator**: Manage how SeerrBridge logs are displayed within the dashboard, and where.
+you can create custom log types, regex patterns, and fully manage how logs are processed in the app.
+- **Request History**: Access historical data of all processed requests and logs via the Log Configurator.
+- **Notifications**: Monitor SeerrBridge processing within Discord via a webhook notification.
+- **Environment Variable Management**: You can manage variables within the application settings and save directly to your .env.
+- **Preset & Custom Regex**: Within settings, you can select from pre-defined regex patterns, make custom ones, and or use the regex builder to create a new custom regex based on your preferences.
+
+BridgeBoard connects directly to your SeerrBridge instance via API, providing a user-friendly way to interact with and monitor your media automation without having to check logs or use command line tools.
+
+To access BridgeBoard, navigate to `http://localhost:3777` after starting both containers with Docker Compose, or running it manually.
+</details>
+
+<details>
 <summary>📊 Compatibility</summary>
 
 | Service        | Status | Notes                                |
@@ -246,129 +268,126 @@ Configure your webhook as mentioned above so SeerrBridge can ingest and process 
    python seerrbridge.py
    ```
 
+### BridgeBoard (Dashboard) Setup
+
+To run the BridgeBoard dashboard locally:
+
+1. **Ensure you have Node.js v20 or newer installed**:
+   ```bash
+   node --version
+   # Should show v20.x.x or higher
+   ```
+   If you need to install or update Node.js, visit [nodejs.org](https://nodejs.org/).
+
+2. **Navigate to the project directory**:
+   ```bash
+   cd SeerrBridge
+   ```
+
+3. **Install Node.js dependencies**:
+   ```bash
+   npm install
+   ```
+
+4. **Build the dashboard**:
+   ```bash
+   npm run build
+   ```
+
+5. **Start the BridgeBoard dashboard**:
+   ```bash
+   npm start
+   ```
+
+6. **Access the dashboard** at [http://localhost:3777](http://localhost:3777)
+
+
 ---
 
 ### 🐳 Docker Support
 
-#### Option 1: Using Docker Pull
+SeerrBridge consists of two components: the main application (seerrbridge) and an optional dashboard (bridgeboard). The recommended way to run them is using Docker Compose with the pre-built images.
 
 ## Prerequisites
-- Docker installed on your system.
-- A `.env` file in your current directory with the required environment variables.
+- Docker and Docker Compose installed on your system
+- A `.env` file with your configuration
 
-    Example `.env`:
-    ```bash
-    RD_ACCESS_TOKEN={"value":"YOUR_TOKEN","expiry":123456789}
-    RD_REFRESH_TOKEN=YOUR_REFRESH_TOKEN
-    RD_CLIENT_ID=YOUR_CLIENT_ID
-    RD_CLIENT_SECRET=YOUR_CLIENT_SECRET
-    TRAKT_API_KEY=YOUR_TRAKT_TOKEN
-    OVERSEERR_API_KEY=YOUR_OVERSEERR_TOKEN
-    OVERSEERR_BASE=https://YOUR_OVERSEERR_URL.COM
-    HEADLESS_MODE=true
-    ENABLE_AUTOMATIC_BACKGROUND_TASK=true
-    ENABLE_SHOW_SUBSCRIPTION_TASK=true
-    REFRESH_INTERVAL_MINUTES=120
-    TORRENT_FILTER_REGEX=^(?!.*【.*?】)(?!.*[\u0400-\u04FF])(?!.*\[esp\]).*
-    MAX_MOVIE_SIZE=0
-    MAX_EPISODE_SIZE=0
-    ```
+### Quick Start with Docker Compose
 
-1. Pull the Image
+1. **Create a docker-compose.yml file**:
 
-    ```bash
-    docker pull ghcr.io/woahai321/seerrbridge:latest
-    ```
+```yaml
+version: '3'
 
-2. Run the container
+services:
+  seerrbridge:
+    image: ghcr.io/woahai321/seerrbridge:latest
+    container_name: seerrbridge
+    ports:
+      - "8777:8777"
+    env_file:
+      - .env
+    volumes:
+      - ./config:/app/config
+    restart: unless-stopped
+    networks:
+      - seerrbridge_network
 
-    Linux
+  bridgeboard:
+    image: ghcr.io/woahai321/bridgeboard:latest
+    container_name: bridgeboard
+    ports:
+      - "3777:3777"
+    env_file:
+      - .env
+    environment:
+      - SEERRBRIDGE_URL=http://seerrbridge:8777
+    restart: unless-stopped
+    depends_on:
+      - seerrbridge
+    networks:
+      - seerrbridge_network
 
-    ```bash
-    docker run -d \
-        --env-file .env \
-        -v $(pwd)/.env:/app/.env \
-        -p 8777:8777 \
-        ghcr.io/woahai321/seerrbridge:latest
-    ```
+networks:
+  seerrbridge_network:
+    driver: bridge
+```
 
-    Windows Powershell
-
-    ```bash
-    docker run -d `
-        --env-file .env `
-        -v "$(${PWD})/.env:/app/.env" `
-        -p 8777:8777 `
-        ghcr.io/woahai321/seerrbridge:latest
-    ```
-
-#### Option 2: Using Docker Compose
-
-1. Clone the repository:
-    ```bash
-    git clone https://github.com/Woahai321/SeerrBridge.git
-    cd SeerrBridge
-    ```
-
-2. Copy the example `.env` file and update it with your specific configuration:
-    ```bash
-    cp .env.example .env
-    ```
-
-    Example `.env`:
-    ```bash
-    RD_ACCESS_TOKEN={"value":"YOUR_TOKEN","expiry":123456789}
-    RD_REFRESH_TOKEN=YOUR_REFRESH_TOKEN
-    RD_CLIENT_ID=YOUR_CLIENT_ID
-    RD_CLIENT_SECRET=YOUR_CLIENT_SECRET
-    TRAKT_API_KEY=YOUR_TRAKT_TOKEN
-    OVERSEERR_API_KEY=YOUR_OVERSEERR_TOKEN
-    OVERSEERR_BASE=https://YOUR_OVERSEERR_URL.COM
-    HEADLESS_MODE=true
-    ENABLE_AUTOMATIC_BACKGROUND_TASK=true
-    ENABLE_SHOW_SUBSCRIPTION_TASK=true
-    REFRESH_INTERVAL_MINUTES=120
-    TORRENT_FILTER_REGEX=^(?!.*【.*?】)(?!.*[\u0400-\u04FF])(?!.*\[esp\]).*
-    MAX_MOVIE_SIZE=0
-    MAX_EPISODE_SIZE=0
-    ```
-
-3. Start the container:
-    ```bash
-    docker compose build
-    docker compose up -d
-    ```
-
-4. Access the app at: [http://localhost:8777](http://localhost:8777).
-
----
-
-#### Option 3: Using Docker Run
-
-Skip Compose and run the container directly:
+2. **Create or edit your `.env` file**:
 
 ```bash
-docker run -d \
-  --name seerrbridge \
-  -p 8777:8777 \
-  -v $(pwd)/config:/app/config \
-  -e RD_ACCESS_TOKEN={"value":"YOUR_TOKEN","expiry":123456789} \
-  -e RD_REFRESH_TOKEN=YOUR_REFRESH_TOKEN \
-  -e RD_CLIENT_ID=YOUR_CLIENT_ID \
-  -e RD_CLIENT_SECRET=YOUR_CLIENT_SECRET \
-  -e TRAKT_API_KEY=YOUR_TRAKT_TOKEN \
-  -e OVERSEERR_API_KEY=YOUR_OVERSEERR_TOKEN \
-  -e OVERSEERR_BASE=https://YOUR_OVERSEERR_URL.COM \
-  -e HEADLESS_MODE=true \
-  -e ENABLE_AUTOMATIC_BACKGROUND_TASK=true \
-  -e ENABLE_SHOW_SUBSCRIPTION_TASK=true \
-  -e REFRESH_INTERVAL_MINUTES=120 \
-  -e TORRENT_FILTER_REGEX=^(?!.*【.*?】)(?!.*[\u0400-\u04FF])(?!.*\[esp\]).* \
-  -e REFRESH_INTERVAL_MINUTES=120 \
-  -e MAX_MOVIE_SIZE=5 \
-  -e MAX_EPISODE_SIZE=1 \
-  ghcr.io/woahai321/seerrbridge:main
+RD_ACCESS_TOKEN={"value":"YOUR_TOKEN","expiry":123456789}
+RD_REFRESH_TOKEN=YOUR_REFRESH_TOKEN
+RD_CLIENT_ID=YOUR_CLIENT_ID
+RD_CLIENT_SECRET=YOUR_CLIENT_SECRET
+TRAKT_API_KEY=YOUR_TRAKT_TOKEN
+OVERSEERR_API_KEY=YOUR_OVERSEERR_TOKEN
+OVERSEERR_BASE=https://YOUR_OVERSEERR_URL.COM
+HEADLESS_MODE=true
+ENABLE_AUTOMATIC_BACKGROUND_TASK=true
+ENABLE_SHOW_SUBSCRIPTION_TASK=true
+REFRESH_INTERVAL_MINUTES=120
+TORRENT_FILTER_REGEX=^(?!.*【.*?】)(?!.*[\u0400-\u04FF])(?!.*\[esp\]).*
+MAX_MOVIE_SIZE=0
+MAX_EPISODE_SIZE=0
 ```
+
+3. **Start the containers**:
+
+```bash
+docker compose up -d
+```
+
+4. **Access the applications**:
+   - SeerrBridge API: [http://localhost:8777](http://localhost:8777)
+   - BridgeBoard Dashboard: [http://localhost:3777](http://localhost:3777)
+
+### Configuration Notes
+
+- **Volumes**: The configuration creates a `config` directory to persist SeerrBridge data
+- **Networks**: Both containers are placed on the same network so they can communicate
+- **Environment Variables**: The bridgeboard container is configured to connect to the seerrbridge container using the internal Docker network
+- **Restart Policy**: Containers will restart automatically unless manually stopped
 ---
 
 ***IF YOU ARE USING OVERSEERR IN DOCKER AND SEERRBRIDGE IN DOCKER, YOUR WEBHOOK IN OVERSEERR NEEDS TO BE THE DOCKER CONTAINER IP***
