@@ -326,10 +326,18 @@ services:
     ports:
       - "8777:8777"
     env_file:
-      - .env
+      - ./.env
     volumes:
       - ./config:/app/config
+      - shared_logs:/app
+      - ./.env:/app/.env
     restart: unless-stopped
+    command: >
+      sh -c "
+        cat /app/.env > /dev/null && 
+        echo 'Starting SeerrBridge with refreshed env' &&
+        uvicorn seerrbridge:app --host 0.0.0.0 --port 8777
+      "
     networks:
       - seerrbridge_network
 
@@ -339,14 +347,28 @@ services:
     ports:
       - "3777:3777"
     env_file:
-      - .env
+      - ./.env
+    volumes:
+      - shared_logs:/seerrbridge_data:ro
+      - ./.env:/app/.env
     environment:
       - SEERRBRIDGE_URL=http://seerrbridge:8777
+      - SEERRBRIDGE_LOG_PATH=/seerrbridge_data/seerbridge.log
+    entrypoint: >
+      sh -c "
+        mkdir -p /app && 
+        ln -sf /seerrbridge_data/seerbridge.log /app/seerbridge.log &&
+        ln -sf /seerrbridge_data/episode_discrepancies.json /app/episode_discrepancies.json &&
+        npm start
+      "
     restart: unless-stopped
     depends_on:
       - seerrbridge
     networks:
       - seerrbridge_network
+
+volumes:
+  shared_logs:
 
 networks:
   seerrbridge_network:
