@@ -12,3 +12,4 @@ uvicorn==0.32.0
 python-Levenshtein==0.26.1
 webdriver-manager==4.0.2
 httpx==0.28.1
+aiohttp==03.11.18

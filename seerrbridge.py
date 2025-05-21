@@ -1,5 +1,5 @@
 # =============================================================================
-# Soluify.com  |  Your #1 IT Problem Solver  |  {SeerrBridge v0.5.1}
+# Soluify.com  |  Your #1 IT Problem Solver  |  {SeerrBridge v0.6}
 # =============================================================================
 #  __         _
 # (_  _ |   .(_
@@ -11,6 +11,7 @@ from fastapi import FastAPI, HTTPException, BackgroundTasks, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field, ValidationError, field_validator
 from typing import Optional, List, Dict, Any
+from contextlib import asynccontextmanager
 import httpx
 import asyncio
 import json
@@ -22,6 +23,7 @@ import re
 import inflect
 import requests
 import platform
+import aiohttp
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
@@ -46,9 +48,6 @@ logger.level("WARNING", color="<cyan>")
 
 # Load environment variables
 load_dotenv()
-
-# Initialize FastAPI
-app = FastAPI()
 
 # Securely load credentials from environment variables
 RD_ACCESS_TOKEN = os.getenv('RD_ACCESS_TOKEN')
@@ -91,6 +90,9 @@ driver = None
 # Initialize a global queue with a maximum size of 500
 request_queue = Queue(maxsize=500)
 processing_task = None  # To track the current processing task
+
+# Add a global variable to track start time
+START_TIME = datetime.now()
 
 class MediaInfo(BaseModel):
     media_type: str
@@ -167,7 +169,7 @@ def refresh_access_token():
                 "value": response_data['access_token'],
                 "expiry": expiry_time
             }, ensure_ascii=False)  # Ensure non-ASCII characters are preserved
-            logger.success("Successfully refreshed access token.")
+            logger.info("Successfully refreshed access token.")
             
             update_env_file()
 
@@ -177,7 +179,7 @@ def refresh_access_token():
                 """)
                 logger.info("Updated Real-Debrid credentials in local storage after token refresh.")
                 driver.refresh()
-                logger.success("Refreshed the page after updating local storage with the new token.")
+                logger.info("Refreshed the page after updating local storage with the new token.")
         else:
             logger.error(f"Failed to refresh access token: {response_data.get('error_description', 'Unknown error')}")
     except Exception as e:
@@ -314,10 +316,10 @@ async def initialize_browser():
                 """
             })
 
-            logger.success("Initialized Selenium WebDriver with WebDriver Manager.")
+            logger.info("Initialized Selenium WebDriver with WebDriver Manager.")
             # Navigate to an initial page to confirm browser works
             driver.get("https://debridmediamanager.com")
-            logger.success("Navigated to Debrid Media Manager page.")
+            logger.info("Navigated to Debrid Media Manager page.")
         except Exception as e:
             logger.error(f"Failed to initialize Selenium WebDriver: {e}")
             raise e
@@ -334,7 +336,7 @@ async def initialize_browser():
         # Refresh the page to apply the local storage values
         driver.refresh()
         login(driver)
-        logger.success("Refreshed the page to apply local storage values.")
+        logger.info("Refreshed the page to apply local storage values.")
         # After refreshing, call the login function to click the login button
         # After successful login, click on "⚙️ Settings" to open the settings popup
         try:
@@ -385,7 +387,7 @@ async def initialize_browser():
             logger.info(f"Inserted regex into 'Default torrents filter' input box: {TORRENT_FILTER_REGEX}")
 
             settings_link.click()
-            logger.success("Closed 'Settings' to save settings.")
+            logger.info("Closed 'Settings' to save settings.")
 
         except (TimeoutException, NoSuchElementException) as ex:
             logger.error(f"Error while interacting with the settings: {ex}")
@@ -401,14 +403,14 @@ async def initialize_browser():
             library_element = WebDriverWait(driver, 2).until(
                 EC.presence_of_element_located((By.XPATH, "//div[@id='library-content']"))  # Adjust the XPath as necessary
             )
-            logger.success("Library section loaded successfully.")
+            logger.info("Library section loaded successfully.")
         except TimeoutException:
             logger.info("Library loading.")
 
         # Wait for at least 2 seconds on the library page
         logger.info("Waiting for 2 seconds on the library page.")
         time.sleep(2)
-        logger.success("Completed waiting on the library page.")
+        logger.info("Completed waiting on the library page.")
 
 async def shutdown_browser():
     global driver
@@ -840,7 +842,7 @@ async def process_movie_requests():
             confirmation_flag = await asyncio.to_thread(search_on_debrid, imdb_id, media_title, media_type, driver, extra_data)
             if confirmation_flag:
                 if mark_completed(media_id, tmdb_id):
-                    logger.success(f"Marked media {media_id} as completed in Overseerr")
+                    logger.info(f"Marked media {media_id} as completed in Overseerr")
                 else:
                     logger.error(f"Failed to mark media {media_id} as completed in Overseerr")
             else:
@@ -1178,7 +1180,7 @@ def search_individual_episodes(imdb_id, movie_title, season_number, season_detai
     # Navigate to the show page with season
     url = f"https://debridmediamanager.com/show/{imdb_id}/{season_number}"
     driver.get(url)
-    logger.success(f"Navigated to show page for Season {season_number}: {url}")
+    logger.info(f"Navigated to show page for Season {season_number}: {url}")
     
     # Wait for the page to load (ensure the status element is present)
     try:
@@ -1249,7 +1251,7 @@ def search_individual_episodes(imdb_id, movie_title, season_number, season_detai
                             logger.info(f"Found match for {episode_id} in box {i}: {title_text}")
                             
                             if prioritize_buttons_in_box(result_box):
-                                logger.success(f"Successfully handled {episode_id} in box {i}")
+                                logger.info(f"Successfully handled {episode_id} in box {i}")
                                 episode_confirmed = True
                                 
                                 # Verify RD status after clicking
@@ -1340,11 +1342,11 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None):
         if media_type == 'movie':
             url = f"https://debridmediamanager.com/movie/{imdb_id}"
             driver.get(url)
-            logger.success(f"Navigated to movie page: {url}")
+            logger.info(f"Navigated to movie page: {url}")
         elif media_type == 'tv':
             url = f"https://debridmediamanager.com/show/{imdb_id}"
             driver.get(url)
-            logger.success(f"Navigated to show page: {url}")
+            logger.info(f"Navigated to show page: {url}")
         else:
             logger.error(f"Unsupported media type: {media_type}")
             return False
@@ -1388,6 +1390,7 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None):
                     )
                 )
                 logger.warning("'No results found' message detected. Skipping further checks.")
+                logger.error(f"Could not find {movie_title}, since no results were found.")
                 return  # Skip further checks if "No results found" is detected
             except TimeoutException:
                 logger.warning("'No results found' message not detected. Proceeding to check for available torrents.")
@@ -1456,7 +1459,7 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None):
 
                 if torrents_match:
                     torrents_count = int(torrents_match.group(1))
-                    logger.success(f"Found {torrents_count} available torrents in RD.")
+                    logger.info(f"Found {torrents_count} available torrents in RD.")
                 else:
                     logger.warning("Could not find the expected 'Found X available torrents in RD' message. Proceeding to check for Instant RD.")
                     torrents_count = 0  # Default to 0 torrents if no match found
@@ -1468,7 +1471,7 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None):
             if torrents_count == 0:
                 logger.warning("No torrents found in RD according to status, but checking for Instant RD buttons.")
             else:
-                logger.success(f"{torrents_count} torrents found in RD. Proceeding with RD checks.")
+                logger.info(f"{torrents_count} torrents found in RD. Proceeding with RD checks.")
             # Initialize a set to track confirmed seasons
             confirmed_seasons = set()
             # Step 7: Check if any red button (RD 100%) exists again before continuing
@@ -1476,10 +1479,10 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None):
 
             # If a red button is confirmed, skip further processing
             if confirmation_flag:
-                logger.success("Red button confirmed. Checking if Movie or TV Show...")
+                logger.info("Red button confirmed. Checking if Movie or TV Show...")
             # If a red button is confirmed and it's not a TV show, skip further processing
             if confirmation_flag and not is_tv_show:
-                logger.success("Red button confirmed for Movie. Skipping further processing.")
+                logger.success(f"Red button confirmed for Movie {movie_title}. Skipping further processing.")
                 return confirmation_flag
 
             # After clicking the matched movie title, we now check the popup boxes for Instant RD buttons
@@ -1496,7 +1499,7 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None):
                         for season in non_discrepant_seasons:
                             # Skip this season if it has already been confirmed
                             if season in confirmed_seasons:
-                                logger.info(f"Season {season} has already been confirmed. Skipping.")
+                                logger.success(f"Season {season} has already been confirmed. Skipping.")
                                 continue  # Skip this season
 
                             # Extract the season number (e.g., "6" from "Season 6")
@@ -1588,7 +1591,7 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None):
                                     if match_complete_seasons(title_text, [season]):
                                         logger.info(f"Found complete season pack for {season} in box {i}: {title_text}")
                                         if prioritize_buttons_in_box(result_box):
-                                            logger.success(f"Successfully handled complete season pack in box {i}.")
+                                            logger.info(f"Successfully handled complete season pack in box {i}.")
                                             confirmation_flag = True
 
                                             # Add the confirmed season to the set
@@ -1623,7 +1626,7 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None):
                                     if match_single_season(title_text, season):
                                         logger.info(f"Found matching season {season} in box {i}: {title_text}")
                                         if prioritize_buttons_in_box(result_box):
-                                            logger.success(f"Successfully handled season {season} in box {i}.")
+                                            logger.info(f"Successfully handled season {season} in box {i}.")
                                             confirmation_flag = True
 
                                             # Add the confirmed season to the set
@@ -2030,7 +2033,7 @@ async def check_show_subscriptions():
         # Navigate to the show page
         url = f"https://debridmediamanager.com/show/{imdb_id}/{season_number}"
         driver.get(url)
-        logger.success(f"Navigated to show page for Season {season_number}: {url}")
+        logger.info(f"Navigated to show page for Season {season_number}: {url}")
 
         # Wait for the page to load
         try:
@@ -2099,7 +2102,7 @@ async def check_show_subscriptions():
                                 logger.info(f"Found match for {episode_id} in box {i}: {title_text}")
 
                                 if prioritize_buttons_in_box(result_box):
-                                    logger.success(f"Successfully handled {episode_id} in box {i}")
+                                    logger.info(f"Successfully handled {episode_id} in box {i}")
                                     episode_confirmed = True
 
                                     # Verify RD status
@@ -2154,7 +2157,7 @@ async def check_show_subscriptions():
         discrepancy["failed_episodes"] = new_failed_episodes
 
         if all_episodes_confirmed:
-            logger.success(f"Successfully processed all episodes for {show_title} Season {season_number}")
+            logger.info(f"Successfully processed all episodes for {show_title} Season {season_number}")
         else:
             logger.warning(f"Failed to process some episodes for {show_title} Season {season_number}. Failed episodes: {new_failed_episodes}")
 
@@ -2167,6 +2170,151 @@ async def check_show_subscriptions():
         logger.error(f"Failed to write updated episode_discrepancies.json: {e}")
 
     logger.info("Completed show subscription check.")
+
+def schedule_token_refresh():
+    """Schedule the token refresh every 10 minutes."""
+    scheduler.add_job(check_and_refresh_access_token, 'interval', minutes=10)
+    logger.info("Scheduled token refresh every 10 minutes.")
+
+# Lifespan event handler
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info("Lifespan startup: Initializing SeerrBridge...")
+    
+    # Startup logic
+    global processing_task
+    logger.info('Starting SeerrBridge...')
+
+    # Check and refresh access token before any other initialization
+    check_and_refresh_access_token()
+
+    # Always initialize the browser when the bot is ready
+    try:
+        await initialize_browser()
+    except Exception as e:
+        logger.error(f"Failed to initialize browser: {e}")
+        raise  # Raise to prevent app start if critical
+
+    # Generate and log status after browser initialization
+    try:
+        status = await get_status()
+        logger.info(f"SeerrBridge browser initialized. Status: {status}")
+    except Exception as e:
+        logger.error(f"Error generating initial status: {e}")
+
+    # Start the request processing task
+    if processing_task is None:
+        processing_task = asyncio.create_task(process_requests())
+        logger.info("Started request processing task.")
+
+    # Schedule the token refresh
+    schedule_token_refresh()
+    scheduler.start()
+
+    # Defer background tasks to run after startup
+    async def run_background_tasks():
+        # Add a retry mechanism to ping /status after startup
+        max_retries = 5
+        retry_delay = 1  # seconds
+        for attempt in range(max_retries):
+            try:
+                async with aiohttp.ClientSession() as session:
+                    async with session.get("http://localhost:8777/status") as response:
+                        if response.status == 200:
+                            status = await response.json()
+                            logger.info(f"Successfully pinged /status after startup: {status}")
+                            break
+                        else:
+                            logger.warning(f"Failed to ping /status (attempt {attempt + 1}/{max_retries}): HTTP {response.status}")
+            except Exception as e:
+                logger.warning(f"Error pinging /status (attempt {attempt + 1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                await asyncio.sleep(retry_delay)
+        else:
+            logger.error("Failed to ping /status after all retries.")
+
+        # Run background tasks
+        if ENABLE_AUTOMATIC_BACKGROUND_TASK:
+            logger.info("Automatic background task is enabled. Starting initial check and recurring task.")
+            try:
+                await process_movie_requests()
+                logger.info("Completed initial check of movie requests.")
+                schedule_recheck_movie_requests()
+            except Exception as e:
+                logger.error(f"Error while processing movie requests: {e}")
+        else:
+            logger.info("Automatic background task is disabled. Skipping initial check and recurring task.")
+
+        if ENABLE_SHOW_SUBSCRIPTION_TASK:
+            logger.info("Show subscription task is enabled. Starting initial check and recurring task.")
+            try:
+                await check_show_subscriptions()
+                logger.info("Completed initial check of show subscriptions.")
+                scheduler.add_job(check_show_subscriptions, 'interval', minutes=REFRESH_INTERVAL_MINUTES)
+                logger.info(f"Scheduled show subscription check every {REFRESH_INTERVAL_MINUTES} minute(s).")
+            except Exception as e:
+                logger.error(f"Error while processing show subscriptions: {e}")
+        else:
+            logger.info("Show subscription task is disabled. Skipping initial check and recurring task.")
+
+    # Schedule background tasks to run after startup
+    asyncio.create_task(run_background_tasks())
+
+    try:
+        logger.info("Lifespan startup complete. Yielding to application...")
+        yield  # Application runs here
+    finally:
+        # Shutdown logic
+        logger.info("Lifespan shutdown: Shutting down SeerrBridge...")
+        try:
+            if processing_task is not None:
+                processing_task.cancel()
+                try:
+                    await processing_task
+                except asyncio.CancelledError:
+                    logger.info("Request processing task cancelled.")
+            if scheduler.running:
+                scheduler.shutdown()
+                logger.info("Scheduler shut down.")
+            if driver is not None:
+                driver.quit()
+                logger.info("Browser closed.")
+        except Exception as e:
+            logger.error(f"Error during shutdown: {e}")
+
+# Initialize FastAPI app with lifespan
+app = FastAPI(lifespan=lifespan)
+
+# Status endpoint (must be after app definition)
+@app.get("/status")
+async def get_status():
+    """Return status information about the running SeerrBridge service."""
+    uptime_seconds = (datetime.now() - START_TIME).total_seconds()
+    
+    # Calculate days, hours, minutes, seconds
+    days, remainder = divmod(uptime_seconds, 86400)
+    hours, remainder = divmod(remainder, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    
+    # Format uptime string
+    uptime_str = ""
+    if days > 0:
+        uptime_str += f"{int(days)}d "
+    if hours > 0 or days > 0:
+        uptime_str += f"{int(hours)}h "
+    if minutes > 0 or hours > 0 or days > 0:
+        uptime_str += f"{int(minutes)}m "
+    uptime_str += f"{int(seconds)}s"
+    
+    return {
+        "status": "running",
+        "version": "0.6",
+        "uptime_seconds": uptime_seconds,
+        "uptime": uptime_str,
+        "start_time": START_TIME.isoformat(),
+        "current_time": datetime.now().isoformat(),
+        "browser_initialized": driver is not None
+    }
 
 ### Webhook Endpoint ###
 @app.post("/jellyseer-webhook/")
@@ -2183,14 +2331,14 @@ async def jellyseer_webhook(request: Request, background_tasks: BackgroundTasks)
         logger.success("Test notification received and processed successfully.")
         return {"status": "success", "message": "Test notification processed successfully."}
 
-    logger.success(f"Received webhook with event: {payload.event}")
+    logger.info(f"Received webhook with event: {payload.event}")
 
     if payload.media is None:
         logger.error("Media information is missing in the payload")
         raise HTTPException(status_code=400, detail="Media information is missing in the payload")
 
     media_type = payload.media.media_type
-    logger.success(f"Received webhook with event: {payload.event} for {media_type.capitalize()}")
+    logger.info(f"Received webhook with event: {payload.event} for {media_type.capitalize()}")
 
     tmdb_id = payload.media.tmdbId
     if not tmdb_id:
@@ -2283,67 +2431,6 @@ async def jellyseer_webhook(request: Request, background_tasks: BackgroundTasks)
 
     return {"status": "success", "title": media_details['title'], "year": media_details['year']}
 
-def schedule_token_refresh():
-    """Schedule the token refresh every 10 minutes."""
-    scheduler.add_job(check_and_refresh_access_token, 'interval', minutes=10)
-    logger.info("Scheduled token refresh every 10 minutes.")
-
-### Background Task to Process Overseerr Requests Periodically ###
-@app.on_event("startup")
-async def startup_event():
-    global processing_task
-    logger.info('Starting SeerrBridge...')
-
-    # Check and refresh access token before any other initialization
-    check_and_refresh_access_token()
-
-    # Always initialize the browser when the bot is ready
-    try:
-        await initialize_browser()
-    except Exception as e:
-        logger.error(f"Failed to initialize browser: {e}")
-        return
-
-    # Start the request processing task if not already started
-    if processing_task is None:
-        processing_task = asyncio.create_task(process_requests())
-        logger.info("Started request processing task.")
-
-    # Schedule the token refresh
-    schedule_token_refresh()
-    scheduler.start()
-
-    # Check if automatic background task is enabled
-    if ENABLE_AUTOMATIC_BACKGROUND_TASK:
-        logger.info("Automatic background task is enabled. Starting initial check and recurring task.")
-        try:
-            # Run the initial check immediately
-            await process_movie_requests()
-            logger.info("Completed initial check of movie requests.")
-
-            # Schedule the rechecking of movie requests every REFRESH_INTERVAL_MINUTES
-            schedule_recheck_movie_requests()
-        except Exception as e:
-            logger.error(f"Error while processing movie requests: {e}")
-    else:
-        logger.info("Automatic background task is disabled. Skipping initial check and recurring task.")
-
-# Check if show subscription task is enabled
-    if ENABLE_SHOW_SUBSCRIPTION_TASK:
-        logger.info("Show subscription task is enabled. Starting initial check and recurring task.")
-        try:
-            # Run the initial show subscription check immediately
-            await check_show_subscriptions()
-            logger.info("Completed initial check of show subscriptions.")
-
-            # Schedule the recurring show subscription check
-            scheduler.add_job(check_show_subscriptions, 'interval', minutes=REFRESH_INTERVAL_MINUTES)
-            logger.info(f"Scheduled show subscription check every {REFRESH_INTERVAL_MINUTES} minute(s).")
-        except Exception as e:
-            logger.error(f"Error while processing show subscriptions: {e}")
-    else:
-        logger.info("Show subscription task is disabled. Skipping initial check and recurring task.")
-
 def schedule_recheck_movie_requests():
     # Correctly schedule the job with the REFRESH_INTERVAL_MINUTES configured interval.
     scheduler.add_job(process_movie_requests, 'interval', minutes=REFRESH_INTERVAL_MINUTES)
@@ -2351,49 +2438,6 @@ def schedule_recheck_movie_requests():
 
 async def on_close():
     await shutdown_browser()  # Ensure browser is closed when the bot closes
-
-async def check_overseerr_base_url(url: str) -> bool:
-    try:
-        logger.info(f"Attempting to check Overseerr base URL: {url}")
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url)
-            logger.info(f"Response from Overseerr base URL: {response.status_code}")
-            return response.status_code == 200 or 307
-    except Exception as e:
-        logger.error(f"Error checking Overseerr base URL: {e}")
-        return False
-
-@app.get("/", response_class=HTMLResponse)
-async def get_index():
-    with open("index.html", "r", encoding="utf-8") as file:
-        return HTMLResponse(content=file.read())
-
-@app.get("/env-vars")
-async def get_env_vars():
-    overseerr_base_status = await check_overseerr_base_url(OVERSEERR_BASE) if OVERSEERR_BASE else False
-
-    return {
-        # Sensitive information (show emojis for "Set" or "Missing")
-        "RD_ACCESS_TOKEN": "✅ Set" if RD_ACCESS_TOKEN else "❌ Missing",
-        "RD_REFRESH_TOKEN": "✅ Set" if RD_REFRESH_TOKEN else "❌ Missing",
-        "RD_CLIENT_ID": "✅ Set" if RD_CLIENT_ID else "❌ Missing",
-        "RD_CLIENT_SECRET": "✅ Set" if RD_CLIENT_SECRET else "❌ Missing",
-        "OVERSEERR_API_KEY": "✅ Set" if OVERSEERR_API_KEY else "❌ Missing",
-        "TRAKT_API_KEY": "✅ Set" if TRAKT_API_KEY else "❌ Missing",
-        # Non-sensitive information (show emojis for "Enabled" or "Disabled")
-        "HEADLESS_MODE": "✅ Enabled" if HEADLESS_MODE else "❌ Disabled",
-        "ENABLE_AUTOMATIC_BACKGROUND_TASK": "✅ Enabled" if ENABLE_AUTOMATIC_BACKGROUND_TASK else "❌ Disabled",
-        "ENABLE_SHOW_SUBSCRIPTION_TASK": "✅ Enabled" if ENABLE_SHOW_SUBSCRIPTION_TASK else "❌ Disabled",
-        # Non-sensitive information (show actual values)
-        "TORRENT_FILTER_REGEX": TORRENT_FILTER_REGEX if TORRENT_FILTER_REGEX else "❌ Not Set",
-        "REFRESH_INTERVAL_MINUTES": REFRESH_INTERVAL_MINUTES if REFRESH_INTERVAL_MINUTES else "❌ Not Set",
-        # URL check
-        "OVERSEERR_BASE": "✅ Valid" if overseerr_base_status else "❌ Invalid",
-        # Max Movie Size
-        "MAX_MOVIE_SIZE": MAX_MOVIE_SIZE if MAX_MOVIE_SIZE else "60",
-        # Max Episode Size
-        "MAX_EPISODE_SIZE": MAX_EPISODE_SIZE if MAX_EPISODE_SIZE else "5",
-    }
 
 # Main entry point for running the FastAPI server
 if __name__ == "__main__":

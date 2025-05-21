@@ -1,0 +1,37 @@
+[
+  {
+    "id": "default",
+    "name": "Default Regex",
+    "pattern": "^(?!.*【.*?】)(?!.*[\\u0400-\\u04FF])(?!.*\\[esp\\]).*",
+    "isDefault": true,
+    "description": "Filters out entries with specific patterns"
+  },
+  {
+    "id": "default-resolution",
+    "name": "Default + 1080p & 2160p",
+    "pattern": "^(?=.*(1080p|2160p))(?!.*【.*?】)(?!.*[\\u0400-\\u04FF])(?!.*\\[esp\\]).*",
+    "isDefault": true,
+    "description": "Default filters plus high resolution content only"
+  },
+  {
+    "id": "default-types",
+    "name": "Default + Torrent Types",
+    "pattern": "^(?=.*(Remux|BluRay|BDRip|BRRip))(?!.*【.*?】)(?!.*[\\u0400-\\u04FF])(?!.*\\[esp\\]).*",
+    "isDefault": true,
+    "description": "Default filters plus high quality formats only"
+  },
+  {
+    "id": "default-complete",
+    "name": "Default with torrent types and resolutions",
+    "pattern": "^(?=.*(1080p|2160p))(?=.*(Remux|BluRay|BDRip|BRRip))(?!.*【.*?】)(?!.*[\\u0400-\\u04FF])(?!.*\\[esp\\]).*",
+    "isDefault": true,
+    "description": "High resolution and high quality formats only"
+  },
+  {
+    "id": "resolution-only",
+    "name": "Resolution Only",
+    "pattern": "^(?=.*(1080p|2160p)).*",
+    "isDefault": true,
+    "description": "Only filter for high resolution content"
+  }
+]
