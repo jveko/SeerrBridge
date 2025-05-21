@@ -317,8 +317,6 @@ SeerrBridge consists of two components: the main application (seerrbridge) and a
 1. **Create a docker-compose.yml file**:
 
 ```yaml
-version: '3'
-
 services:
   seerrbridge:
     image: ghcr.io/woahai321/seerrbridge:latest
@@ -349,7 +347,7 @@ services:
     env_file:
       - ./.env
     volumes:
-      - shared_logs:/seerrbridge_data:ro
+      - shared_logs:/seerrbridge_data
       - ./.env:/app/.env
     environment:
       - SEERRBRIDGE_URL=http://seerrbridge:8777
