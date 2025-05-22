@@ -490,12 +490,20 @@ def clean_title(title, target_lang='en'):
     """
     Cleans the movie title by removing commas, hyphens, colons, semicolons, and apostrophes,
     translating it to the target language, and converting to lowercase.
+    For TV shows with episode information, extracts just the main title before cleaning.
     """
     # Translate the title to the target language
     translated_title = translate_title(title, target_lang)
-
+    
+    # For TV shows, extract just the main title (before any S01E01 pattern)
+    # This helps with matching by ignoring episode info and technical specs
+    main_title = translated_title
+    season_ep_match = re.search(r'S\d+E\d+', translated_title, re.IGNORECASE)
+    if season_ep_match:
+        main_title = translated_title[:season_ep_match.start()].strip()
+    
     # Remove commas, hyphens, colons, semicolons, and apostrophes
-    cleaned_title = re.sub(r"[,:;'-]", '', translated_title)
+    cleaned_title = re.sub(r"[,:;'-]", '', main_title)
     # Replace multiple spaces with a single dot
     cleaned_title = re.sub(r'\s+', '.', cleaned_title)
     # Convert to lowercase for comparison
@@ -509,9 +517,8 @@ def normalize_title(title, target_lang='en'):
     # Replace ellipsis with three periods
     title = title.replace('…', '...')
     # Replace smart apostrophes with regular apostrophes
-    title = title.replace('’', "'")
-    # Further normalization can be added here if required
-    return title.strip()
+    title = title.replace("'", "'")
+    
     # Translate the title to the target language
     translated_title = translate_title(title, target_lang)
 
@@ -1252,8 +1259,12 @@ def search_individual_episodes(imdb_id, movie_title, season_number, season_detai
                         logger.info(f"Box {i} title (second pass): {title_text}")
                         
                         # Check if the title matches the episode
-                        if episode_id.lower() in title_text.lower() and \
-                           fuzz.partial_ratio(clean_title(title_text, 'en'), clean_title(movie_title, 'en')) >= 69:
+                        title_clean = clean_title(title_text, 'en')
+                        movie_clean = clean_title(movie_title, 'en')
+                        match_ratio = fuzz.partial_ratio(title_clean, movie_clean)
+                        logger.info(f"Match ratio: {match_ratio} for '{title_clean}' vs '{movie_clean}'")
+                        
+                        if episode_id.lower() in title_text.lower() and match_ratio >= 50:
                             logger.info(f"Found match for {episode_id} in box {i}: {title_text}")
                             
                             if prioritize_buttons_in_box(result_box):
@@ -2103,8 +2114,12 @@ async def check_show_subscriptions():
                             title_text = title_element.text.strip()
                             logger.info(f"Box {i} title: {title_text}")
 
-                            if episode_id.lower() in title_text.lower() and \
-                               fuzz.partial_ratio(clean_title(title_text, 'en'), clean_title(show_title, 'en')) >= 69:
+                            title_clean = clean_title(title_text, 'en')
+                            show_clean = clean_title(show_title, 'en')
+                            match_ratio = fuzz.partial_ratio(title_clean, show_clean)
+                            logger.info(f"Match ratio: {match_ratio} for '{title_clean}' vs '{show_clean}'")
+                            
+                            if episode_id.lower() in title_text.lower() and match_ratio >= 50:
                                 logger.info(f"Found match for {episode_id} in box {i}: {title_text}")
 
                                 if prioritize_buttons_in_box(result_box):
