@@ -211,11 +211,11 @@ async def process_movie_queue():
                     
                     if confirmation_flag:
                         if mark_completed(media_id, tmdb_id):
-                            logger.info(f"Marked media {media_id} as completed in Overseerr")
+                            logger.info(f"Marked {movie_title} ({media_id}) as completed in Overseerr")
                         else:
                             logger.error(f"Failed to mark media {media_id} as completed in Overseerr")
                     else:
-                        logger.info(f"Media {media_id} was not properly confirmed. Skipping marking as completed.")
+                        logger.info(f"{movie_title} ({media_id}) was not properly confirmed. Skipping marking as completed.")
                         
             except Exception as ex:
                 logger.critical(f"Error processing movie request for IMDb ID {imdb_id}: {ex}")
@@ -265,11 +265,11 @@ async def process_tv_queue():
                         
                         if confirmation_flag:
                             if mark_completed(media_id, tmdb_id):
-                                logger.info(f"Marked media {media_id} as completed in Overseerr")
+                                logger.info(f"Marked {movie_title} ({media_id}) as completed in Overseerr")
                             else:
                                 logger.error(f"Failed to mark media {media_id} as completed in Overseerr")
                         else:
-                            logger.info(f"Media {media_id} was not properly confirmed. Skipping marking as completed.")
+                            logger.info(f"{movie_title} ({media_id}) was not properly confirmed. Skipping marking as completed.")
                             
                 except Exception as ex:
                     logger.critical(f"Error processing TV request for IMDb ID {imdb_id}: {ex}")
