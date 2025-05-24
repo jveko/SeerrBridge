@@ -3,30 +3,56 @@ services:
     build:
       context: .
       dockerfile: Dockerfile  # Explicitly specify the Python Dockerfile
+    container_name: seerrbridge
     ports:
       - "8777:8777"
     env_file:
-      - .env
+      - ./.env
     volumes:
-      - .:/app
-    restart: always
+      - shared_logs:/app/logs
+      - ./.env:/app/.env
+    restart: unless-stopped
+    command: >
+      sh -c "
+        cat /app/.env > /dev/null &&
+        echo 'Starting SeerrBridge with refreshed env' &&
+        uvicorn main:app --host 0.0.0.0 --port 8777
+      "
+    networks:
+      - seerrbridge_network
 
   bridgeboard:
     build:
       context: .
       dockerfile: Dockerfile.node  # Point to the Node.js Dockerfile
+    container_name: bridgeboard
     ports:
       - "3777:3777"
     env_file:
-      - .env
+      - ./.env
     volumes:
-      - .:/app
+      - shared_logs:/app/logs
+      - ./.env:/app/.env
       - node_modules:/app/node_modules
       - next_build:/app/.next
     environment:
-    - SEERRBRIDGE_URL=http://seerrbridge:8777
-    restart: always
-    
+      - SEERRBRIDGE_URL=http://seerrbridge:8777
+      - SEERRBRIDGE_LOG_PATH=/logs/seerrbridge.log
+    entrypoint: >
+      sh -c "
+        npm start
+      "
+    restart: unless-stopped
+    depends_on:
+      - seerrbridge
+    networks:
+      - seerrbridge_network
+
 volumes:
+  shared_logs:
   node_modules:
   next_build:
+
+networks:
+  seerrbridge_network:
+    driver: bridge
