@@ -509,14 +509,23 @@ def check_red_buttons(driver, movie_title, normalized_seasons, confirmed_seasons
 
     try:
         all_red_buttons_elements = driver.find_elements(By.XPATH, "//button[contains(@class, 'bg-red-900/30')]")
-        red_buttons_elements = [button for button in all_red_buttons_elements if "Report" not in button.text]
-        logger.info(f"Found {len(red_buttons_elements)} red button(s) (100% RD) without 'Report'. Verifying titles.")
-
+        # Filter out "Report" buttons and buttons that don't contain "RD (100%)"
+        red_buttons_elements = [
+            button for button in all_red_buttons_elements 
+            if "Report" not in button.text and "RD (100%)" in button.text
+        ]
+        logger.info(f"Found {len(red_buttons_elements)} red button(s) with 'RD (100%)' without 'Report'. Verifying titles.")
         for i, red_button_element in enumerate(red_buttons_elements, start=1):
             if "Report" in red_button_element.text:
                 continue
-            logger.info(f"Checking red button {i}...")
-
+                
+            # Double-check that this is actually an RD (100%) button
+            button_text = red_button_element.text.strip()
+            if "RD (100%)" not in button_text:
+                logger.warning(f"Red button {i} does not contain 'RD (100%)' - text: '{button_text}'. Skipping.")
+                continue
+                
+            logger.info(f"Checking red button {i} with text: '{button_text}'...")
             try:
                 red_button_title_element = red_button_element.find_element(By.XPATH, ".//ancestor::div[contains(@class, 'border-2')]//h2")
                 red_button_title_text = red_button_title_element.text.strip()
@@ -553,7 +562,7 @@ def check_red_buttons(driver, movie_title, normalized_seasons, confirmed_seasons
                         episode_matched = episode_id.lower() in red_button_title_text.lower()
 
                 if title_matched and year_matched and (not is_tv_show or (season_matched and episode_matched)):
-                    logger.info(f"Found a match on red button {i} - {red_button_title_cleaned}. Marking as confirmed.")
+                    logger.info(f"Found a match on red button {i} - {red_button_title_cleaned} with RD (100%). Marking as confirmed.")
                     confirmation_flag = True
                     if is_tv_show and found_season_normalized and not episode_id:
                         confirmed_seasons.add(found_season_normalized)
@@ -566,9 +575,9 @@ def check_red_buttons(driver, movie_title, normalized_seasons, confirmed_seasons
                 continue
 
     except NoSuchElementException:
-        logger.info("No red buttons (100% RD) detected. Proceeding with optional fallback.")
+        logger.info("No red buttons with 'RD (100%)' detected. Proceeding with optional fallback.")
 
-    return confirmation_flag, confirmed_seasons 
+    return confirmation_flag, confirmed_seasons
 
 def refresh_library_stats():
     """
