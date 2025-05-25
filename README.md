@@ -93,6 +93,7 @@ BridgeBoard is a sleek, modern web dashboard that complements the SeerrBridge ap
 - **TV Show Subscription Tracking**: Monitor your subscribed shows, their episode status, and unsubscribe.
 - **Log Configurator**: Manage how SeerrBridge logs are displayed within the dashboard, and where.
 you can create custom log types, regex patterns, and fully manage how logs are processed in the app.
+The app comes with a preset [logs_config.json](https://github.com/Woahai321/SeerrBridge/blob/main/logs/log_config.json), but you can configure logs anyway you like. We may adjust this from time to time.
 - **Request History**: Access historical data of all processed requests and logs via the Log Configurator.
 - **Notifications**: Monitor SeerrBridge processing within Discord via a webhook notification.
 - **Environment Variable Management**: You can manage variables within the application settings and save directly to your .env.
