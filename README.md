@@ -333,7 +333,7 @@ services:
       sh -c "
         cat /app/.env > /dev/null && 
         echo 'Starting SeerrBridge with refreshed env' &&
-        uvicorn seerrbridge:app --host 0.0.0.0 --port 8777
+        uvicorn main:app --host 0.0.0.0 --port 8777
       "
     networks:
       - seerrbridge_network
@@ -346,16 +346,13 @@ services:
     env_file:
       - ./.env
     volumes:
-      - shared_logs:/seerrbridge_data
+      - shared_logs:/app
       - ./.env:/app/.env
     environment:
       - SEERRBRIDGE_URL=http://seerrbridge:8777
-      - SEERRBRIDGE_LOG_PATH=/seerrbridge_data/seerrbridge.log
+      - SEERRBRIDGE_LOG_PATH=/logs/seerrbridge.log
     entrypoint: >
       sh -c "
-        mkdir -p /app && 
-        ln -sf /seerrbridge_data/seerrbridge.log /app/seerrbridge.log &&
-        ln -sf /seerrbridge_data/episode_discrepancies.json /app/episode_discrepancies.json &&
         npm start
       "
     restart: unless-stopped
