@@ -310,6 +310,7 @@ async def jellyseer_webhook(request: Request, background_tasks: BackgroundTasks)
                                 "show_title": media_title,
                                 "trakt_show_id": trakt_show_id,
                                 "imdb_id": imdb_id,
+                                "seerr_id": request_id,  # Add Overseerr request ID for unsubscribe functionality
                                 "season_number": season_number,
                                 "season_details": season_details,
                                 "timestamp": timestamp,

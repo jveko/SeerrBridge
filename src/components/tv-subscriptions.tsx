@@ -231,6 +231,11 @@ function SubscriptionDetailsDialog({
               <h3 className="text-sm text-muted-foreground mb-1">Trakt ID</h3>
               <p>{show.trakt_show_id || "N/A"}</p>
             </div>
+            
+            <div className="glass-card p-3 flex-1 min-w-[180px]">
+              <h3 className="text-sm text-muted-foreground mb-1">Seerr ID</h3>
+              <p>{show.seerr_id || "N/A"}</p>
+            </div>
           </div>
 
           {/* Season Details */}
@@ -313,7 +318,7 @@ function SubscriptionDetailsDialog({
       <ConfirmationDialog
         isOpen={isConfirmOpen}
         title="Unsubscribe from Show"
-        message={`Are you sure you want to unsubscribe from "${show.show_title}"? You will need to re-request the show to get it back.`}
+        message={`Are you sure you want to unsubscribe from "${show.show_title}"? This will remove it from monitoring and attempt to delete the request from Overseerr if possible.`}
         onConfirm={handleConfirmUnsubscribe}
         onCancel={handleCancelUnsubscribe}
       />
@@ -441,6 +446,8 @@ export function TVSubscriptions() {
         throw new Error(data.error || 'Failed to unsubscribe');
       }
       
+      const data = await response.json();
+      
       // Close the dialog
       setIsDialogOpen(false);
       
@@ -451,9 +458,21 @@ export function TVSubscriptions() {
           s.season === show.season)
       ));
       
+      // Show success message with details about Overseerr deletion
+      let alertMessage = data.message;
+      if (data.warnings && data.warnings.length > 0) {
+        alertMessage += `\n\nWarnings:\n${data.warnings.join('\n')}`;
+      }
+      
+      if (data.overseerr_deleted) {
+        alert(`✅ ${alertMessage}`);
+      } else {
+        alert(`⚠️ ${alertMessage}`);
+      }
+      
     } catch (error) {
       console.error('Error unsubscribing from show:', error);
-      alert(`Failed to unsubscribe: ${error instanceof Error ? error.message : String(error)}`);
+      alert(`❌ Failed to unsubscribe: ${error instanceof Error ? error.message : String(error)}`);
     } finally {
       setUnsubscribeLoading(false);
     }

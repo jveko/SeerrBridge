@@ -377,8 +377,9 @@ async def populate_queues_from_overseerr():
     for request in requests:
         tmdb_id = request['media']['tmdbId']
         media_id = request['media']['id']
+        request_id = request['id']  # Extract request ID for seerr_id
         media_type = request['media']['mediaType']  # Extract media_type from the request
-        logger.info(f"Processing request with TMDB ID {tmdb_id} and media ID {media_id} (Media Type: {media_type})")
+        logger.info(f"Processing request with TMDB ID {tmdb_id}, media ID {media_id}, and request ID {request_id} (Media Type: {media_type})")
 
         # Extract requested seasons for TV shows
         extra_data = []
@@ -428,6 +429,7 @@ async def populate_queues_from_overseerr():
                         if has_aired:
                             logger.info(f"Next episode (E{aired_episodes + 1:02d}) has aired for {media_title} Season {season_number}. Updating aired_episodes.")
                             season_details['aired_episodes'] = aired_episodes + 1
+                            aired_episodes = season_details['aired_episodes']  # Update the local variable
                         else:
                             logger.info(f"Next episode (E{aired_episodes + 1:02d}) has not aired for {media_title} Season {season_number}.")
                         
@@ -442,6 +444,7 @@ async def populate_queues_from_overseerr():
                             "show_title": media_title,
                             "trakt_show_id": trakt_show_id,
                             "imdb_id": imdb_id,
+                            "seerr_id": request_id,  # Add Overseerr request ID for unsubscribe functionality
                             "season_number": season_number,
                             "season_details": season_details,
                             "timestamp": timestamp,

@@ -112,6 +112,7 @@ export interface ShowSubscription {
   failedEpisodes: string[];
   imdb_id?: string;
   trakt_show_id?: number;
+  seerr_id?: number; // Overseerr request ID for unsubscribe functionality
   season_details?: SeasonDetails;
   timestamp?: string;
 }
