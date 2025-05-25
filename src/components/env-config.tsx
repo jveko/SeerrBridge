@@ -18,7 +18,8 @@ import {
   PlusCircleIcon,
   TagIcon,
   EditIcon,
-  Trash2Icon
+  Trash2Icon,
+  ClockIcon
 } from "lucide-react";
 import RegexBuilder from "./regex-builder";
 
@@ -48,6 +49,18 @@ const EPISODE_SIZE_OPTIONS = [
   { value: "5", label: "5 GB" },
 ];
 
+const REFRESH_INTERVAL_OPTIONS = [
+  { value: "10", label: "10 Minutes" },
+  { value: "15", label: "15 Minutes" },
+  { value: "30", label: "30 Minutes" },
+  { value: "60", label: "1 Hour" },
+  { value: "120", label: "2 Hours" },
+  { value: "240", label: "4 Hours" },
+  { value: "360", label: "6 Hours" },
+  { value: "720", label: "12 Hours" },
+  { value: "1440", label: "24 Hours" },
+];
+
 // Type for regex presets
 type RegexPreset = {
   id: string;
@@ -71,7 +84,6 @@ export function EnvConfig() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
   const [visibleValues, setVisibleValues] = useState<Record<string, boolean>>({});
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const dropdownRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -88,7 +100,8 @@ export function EnvConfig() {
     pattern: string;
     description?: string;
   }>({ name: '', pattern: '' });
-  const ITEMS_PER_PAGE = 5;
+  const [timeUntilRefresh, setTimeUntilRefresh] = useState(30);
+  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Function to set dropdown refs
   const setDropdownRef = (key: string, element: HTMLDivElement | null) => {
@@ -119,15 +132,55 @@ export function EnvConfig() {
       }
     }
 
+    // Silent background refresh function that preserves scroll position
+    async function silentRefreshEnvVars() {
+      try {
+        const response = await fetch("/api/env");
+        if (!response.ok) {
+          throw new Error("Failed to fetch environment variables");
+        }
+        const data = await response.json();
+        
+        // Only update if data has actually changed to minimize re-renders
+        setEnvVars(prev => {
+          const hasChanges = JSON.stringify(prev) !== JSON.stringify(data);
+          return hasChanges ? data : prev;
+        });
+        
+        setError(null);
+        
+        // Initialize validation for OVERSEERR_BASE if it exists and changed
+        if (data.OVERSEERR_BASE && data.OVERSEERR_BASE !== envVars.OVERSEERR_BASE) {
+          validateOverseerrConnection(data.OVERSEERR_BASE);
+        }
+      } catch (err) {
+        // Don't show errors for background refreshes unless it's critical
+        console.error("Background refresh failed:", err);
+      }
+    }
+
     fetchEnvVars();
     
     // Set up refresh timer
-    const interval = setInterval(() => {
-      fetchEnvVars();
-    }, 30000); // 30 seconds
+    if (refreshIntervalRef.current) {
+      clearInterval(refreshIntervalRef.current);
+    }
+    
+    setTimeUntilRefresh(30);
+    refreshIntervalRef.current = setInterval(() => {
+      setTimeUntilRefresh(prev => {
+        if (prev <= 1) {
+          silentRefreshEnvVars(); // Use silent refresh instead of full refresh
+          return 30;
+        }
+        return prev - 1;
+      });
+    }, 1000); // Update countdown every second
     
     return () => {
-      clearInterval(interval);
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+      }
       if (validationTimeoutRef.current) {
         clearTimeout(validationTimeoutRef.current);
       }
@@ -419,8 +472,8 @@ export function EnvConfig() {
         setSuccess("Environment variables saved. Connection to SeerrBridge failed, manual restart may be required.");
       }
 	  
-      // Refresh the page to apply the changes
-      router.refresh();
+      // Note: Removed router.refresh() to avoid scroll position reset
+      // The automatic refresh timer will pick up any changes
     } catch (err) {
       setError(err instanceof Error ? err.message : "An unknown error occurred");
     } finally {
@@ -430,29 +483,7 @@ export function EnvConfig() {
 
   // Calculate pagination values
   const envVarEntries = Object.entries(envVars);
-  const totalPages = Math.ceil(envVarEntries.length / ITEMS_PER_PAGE);
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const endIndex = startIndex + ITEMS_PER_PAGE;
-  const paginatedEnvVars = envVarEntries.slice(startIndex, endIndex);
-
-  // Pagination handlers
-  const goToNextPage = () => {
-    if (currentPage < totalPages) {
-      setCurrentPage(currentPage + 1);
-    }
-  };
-
-  const goToPrevPage = () => {
-    if (currentPage > 1) {
-      setCurrentPage(currentPage - 1);
-    }
-  };
-
-  useEffect(() => {
-    // Reset to first page when env vars list changes
-    setCurrentPage(1);
-  }, [Object.keys(envVars).length]);
-
+  
   // Check if a value is sensitive (contains token, key, password, etc.)
   const isSensitiveValue = (key: string): boolean => {
     const sensitiveTerms = ['token', 'key', 'password', 'secret', 'auth', 'credential'];
@@ -477,6 +508,10 @@ export function EnvConfig() {
     
     if (key === "MAX_EPISODE_SIZE") {
       return EPISODE_SIZE_OPTIONS;
+    }
+    
+    if (key === "REFRESH_INTERVAL_MINUTES") {
+      return REFRESH_INTERVAL_OPTIONS;
     }
     
     // Not a dropdown variable
@@ -556,12 +591,12 @@ export function EnvConfig() {
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col h-full">
             <div className="flex-1 p-5 space-y-4 overflow-auto">
-              {paginatedEnvVars.map(([key, value], index) => {
+              {envVarEntries.map(([key, value], index) => {
                 const isSensitive = isSensitiveValue(key);
                 const isVisible = visibleValues[key] || false;
                 const dropdownOptions = getDropdownOptions(key);
                 const isDropdownOpen = openDropdown === key;
-                const openUpward = shouldOpenUpward(index, paginatedEnvVars.length);
+                const openUpward = shouldOpenUpward(index, envVarEntries.length);
                 const isOverseerrBase = key === 'OVERSEERR_BASE';
                 const validation = isOverseerrBase ? validationStatus.OVERSEERR_BASE : undefined;
                 const isRegexFilter = isRegexVariable(key);
@@ -830,36 +865,6 @@ export function EnvConfig() {
               })}
             </div>
             
-            {totalPages > 1 && (
-              <div className="p-4 pt-1 flex items-center justify-center border-t border-border/20">
-                <div className="flex items-center space-x-2">
-                  <button 
-                    type="button"
-                    onClick={goToPrevPage}
-                    disabled={currentPage === 1}
-                    className={`p-1 rounded-full ${currentPage === 1 ? 'text-muted-foreground' : 'hover:bg-primary/10 text-primary'}`}
-                    aria-label="Previous page"
-                  >
-                    <ChevronLeftIcon size={20} />
-                  </button>
-                  
-                  <span className="text-xs text-muted-foreground">
-                    Page {currentPage} of {totalPages}
-                  </span>
-                  
-                  <button 
-                    type="button"
-                    onClick={goToNextPage}
-                    disabled={currentPage === totalPages}
-                    className={`p-1 rounded-full ${currentPage === totalPages ? 'text-muted-foreground' : 'hover:bg-primary/10 text-primary'}`}
-                    aria-label="Next page"
-                  >
-                    <ChevronRightIcon size={20} />
-                  </button>
-                </div>
-              </div>
-            )}
-            
             {success && (
               <div className="px-5 py-3 flex items-center space-x-2 border-t border-success/20 bg-success/5 text-success">
                 <CheckCircleIcon size={16} />
@@ -868,7 +873,16 @@ export function EnvConfig() {
             )}
             
             <div className="p-4 border-t border-border/50 flex justify-between items-center">
-              <p className="text-xs text-muted-foreground">Auto-refreshes every 30 seconds</p>
+              <div className="flex items-center">
+                <span className="text-xs text-amber-400 flex items-center mr-3">
+                  <AlertCircleIcon size={14} className="mr-1" />
+                  Make sure to save changes before auto-refresh
+                </span>
+                <span className="text-xs text-muted-foreground flex items-center">
+                  <ClockIcon size={14} className="mr-1" />
+                  Refreshing in {timeUntilRefresh}s
+                </span>
+              </div>
               <button
                 type="submit"
                 className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md transition-colors flex items-center"
