@@ -389,13 +389,19 @@ MAX_MOVIE_SIZE=0
 MAX_EPISODE_SIZE=0
 ```
 
-3. **Start the containers**:
+3. **Ensure you get the latest image**:
+
+```bash
+docker compose pull
+```
+
+4. **Start the containers**:
 
 ```bash
 docker compose up -d
 ```
 
-4. **Access the applications**:
+5. **Access the applications**:
    - SeerrBridge API: [http://localhost:8777](http://localhost:8777)
    - BridgeBoard Dashboard: [http://localhost:3777](http://localhost:3777)
 
