@@ -23,10 +23,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     jq
 
-# Download and install Chrome (latest stable version)
-RUN CHROME_URL=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json" | \
+# Fetch and install the latest stable Chrome version
+RUN CHROME_VERSION=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json" | \
+    jq -r '.channels.Stable.version') && \
+    CHROME_URL=$(curl -s "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json" | \
     jq -r '.channels.Stable.downloads.chrome[] | select(.platform == "linux64") | .url') && \
-    echo "Downloading Chrome from: $CHROME_URL" && \
+    echo "Downloading Chrome version ${CHROME_VERSION} from: $CHROME_URL" && \
     wget -O /tmp/chrome-linux64.zip $CHROME_URL && \
     unzip /tmp/chrome-linux64.zip -d /opt/ && \
     mv /opt/chrome-linux64 /opt/chrome && \
@@ -45,7 +47,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the application code
 COPY . .
 
-# Expose the application port (if needed)
+# Expose the application port
 EXPOSE 8777
 
 # Run the application
