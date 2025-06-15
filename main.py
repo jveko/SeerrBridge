@@ -188,14 +188,14 @@ async def jellyseer_webhook(request: Request, background_tasks: BackgroundTasks)
         
         # Parse payload into WebhookPayload model
         payload = WebhookPayload(**raw_payload)
-        
-        # Extract request_id early so it's available throughout the function
-        request_id = int(payload.request.request_id)
-        
+
         # Test notification handling
         if payload.notification_type == "TEST_NOTIFICATION":
             logger.info("Test notification received and processed successfully.")
             return {"status": "success", "message": "Test notification processed successfully."}
+        
+        # Extract request_id early so it's available throughout the function
+        request_id = int(payload.request.request_id)
         
         logger.info(f"Received webhook with event: {payload.event}")
         
