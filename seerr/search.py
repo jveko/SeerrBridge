@@ -13,7 +13,7 @@ from selenium.common.exceptions import StaleElementReferenceException, NoSuchEle
 from loguru import logger
 from fuzzywuzzy import fuzz
 
-from seerr.config import TORRENT_FILTER_REGEX, DISCREPANCY_REPO_FILE
+from seerr.config import TORRENT_FILTER_REGEX, TORRENT_FILTER_REGEX_LIST, DISCREPANCY_REPO_FILE
 from seerr.browser import driver, click_show_more_results, check_red_buttons, prioritize_buttons_in_box
 from seerr.utils import (
     clean_title,
@@ -28,6 +28,40 @@ from seerr.utils import (
     match_single_season
 )
 from seerr.background_tasks import search_individual_episodes
+
+def apply_filter_pattern(driver, pattern):
+    """
+    Apply a specific regex pattern to the DMM search filter input and wait for results to update
+    
+    Args:
+        driver: Selenium WebDriver instance
+        pattern (str): Regex pattern to apply
+        
+    Returns:
+        bool: True if pattern was applied successfully, False otherwise
+    """
+    try:
+        # Find the query input field and update it with the current pattern
+        query_input = WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.ID, "query"))
+        )
+        
+        # Clear the existing filter and set the new pattern
+        query_input.clear()
+        query_input.send_keys(pattern)
+        
+        # Wait a moment for the filter to be applied and results to update
+        time.sleep(2)
+        
+        logger.info(f"Applied filter pattern: {pattern}")
+        return True
+        
+    except TimeoutException:
+        logger.warning(f"Failed to apply filter pattern: {pattern}")
+        return False
+    except Exception as e:
+        logger.error(f"Error applying filter pattern {pattern}: {e}")
+        return False
 
 def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None):
     """
@@ -103,21 +137,76 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None):
 
         confirmation_flag = False  # Initialize the confirmation flag
 
+        # Implement priority-based filtering using TORRENT_FILTER_REGEX_LIST
+        if TORRENT_FILTER_REGEX_LIST:
+            logger.info(f"Starting priority-based filtering with {len(TORRENT_FILTER_REGEX_LIST)} patterns")
+            
+            for priority_index, pattern in enumerate(TORRENT_FILTER_REGEX_LIST, 1):
+                logger.info(f"Trying priority pattern {priority_index}/{len(TORRENT_FILTER_REGEX_LIST)}: {pattern}")
+                
+                # Apply the current priority pattern
+                if not apply_filter_pattern(driver, pattern):
+                    logger.warning(f"Failed to apply priority pattern {priority_index}, skipping to next")
+                    continue
+                
+                # Process with current pattern - execute the existing result box processing logic
+                confirmation_flag = process_search_results(driver, movie_title, media_type, normalized_seasons, 
+                                                         discrepant_seasons, is_tv_show, imdb_id, pattern)
+                
+                if confirmation_flag:
+                    logger.success(f"Successfully matched with priority pattern {priority_index}: {pattern}")
+                    return confirmation_flag
+                else:
+                    logger.info(f"Priority pattern {priority_index} did not yield results, trying next pattern")
+            
+            logger.warning("All priority patterns exhausted without successful match")
+            return False
+        else:
+            # Fallback to legacy single pattern mode
+            logger.info("No priority patterns configured, using legacy single pattern mode")
+            confirmation_flag = process_search_results(driver, movie_title, media_type, normalized_seasons, 
+                                                     discrepant_seasons, is_tv_show, imdb_id, TORRENT_FILTER_REGEX)
+            return confirmation_flag
+
+    except Exception as ex:
+        logger.critical(f"Error during Selenium automation: {ex}")
+        return False
+
+def process_search_results(driver, movie_title, media_type, normalized_seasons, discrepant_seasons, is_tv_show, imdb_id, current_pattern):
+    """
+    Process search results for a given filter pattern
+    
+    Args:
+        driver: Selenium WebDriver instance
+        movie_title (str): Title of the media
+        media_type (str): Type of media ('movie' or 'tv')
+        normalized_seasons (list): List of normalized season strings
+        discrepant_seasons (dict): Dictionary of seasons with discrepancies
+        is_tv_show (bool): Whether this is a TV show
+        imdb_id (str): IMDb ID of the media
+        current_pattern (str): Current filter pattern being tested
+        
+    Returns:
+        bool: True if successful match found, False otherwise
+    """
+    confirmation_flag = False
+    confirmed_seasons = set()
+
+    try:
         # Wait for the movie's details page to load by listening for the status message
+        # Step 1: Check for Status Message
         try:
-            # Step 1: Check for Status Message
-            try:
-                no_results_element = WebDriverWait(driver, 2).until(
-                    EC.text_to_be_present_in_element(
-                        (By.XPATH, "//div[@role='status' and contains(@aria-live, 'polite')]"),
-                        "No results found"
-                    )
+            no_results_element = WebDriverWait(driver, 2).until(
+                EC.text_to_be_present_in_element(
+                    (By.XPATH, "//div[@role='status' and contains(@aria-live, 'polite')]"),
+                    "No results found"
                 )
-                logger.warning("'No results found' message detected. Skipping further checks.")
-                logger.error(f"Could not find {movie_title}, since no results were found.")
-                return False  # Skip further checks if "No results found" is detected
-            except TimeoutException:
-                logger.warning("'No results found' message not detected. Proceeding to check for available torrents.")
+            )
+            logger.warning("'No results found' message detected. Skipping further checks.")
+            logger.error(f"Could not find {movie_title}, since no results were found.")
+            return False  # Skip further checks if "No results found" is detected
+        except TimeoutException:
+            logger.warning("'No results found' message not detected. Proceeding to check for available torrents.")
 
             try:
                 status_element = WebDriverWait(driver, 5).until(
@@ -579,12 +668,11 @@ def search_on_debrid(imdb_id, movie_title, media_type, driver, extra_data=None):
             except TimeoutException:
                 logger.warning("Timeout waiting for result boxes to appear.")
 
-            return confirmation_flag  # Return the confirmation flag
+        return confirmation_flag  # Return the confirmation flag
 
-        except TimeoutException:
-            logger.warning("Timeout waiting for the RD status message.")
-            return False
-
+    except TimeoutException:
+        logger.warning("Timeout waiting for the RD status message.")
+        return False
     except Exception as ex:
-        logger.critical(f"Error during Selenium automation: {ex}")
+        logger.critical(f"Error during process_search_results: {ex}")
         return False 

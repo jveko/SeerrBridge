@@ -384,7 +384,7 @@ async def reload_environment():
         RD_ACCESS_TOKEN, RD_REFRESH_TOKEN, RD_CLIENT_ID, RD_CLIENT_SECRET,
         OVERSEERR_BASE, OVERSEERR_API_BASE_URL, OVERSEERR_API_KEY, TRAKT_API_KEY,
         HEADLESS_MODE, ENABLE_AUTOMATIC_BACKGROUND_TASK, ENABLE_SHOW_SUBSCRIPTION_TASK,
-        TORRENT_FILTER_REGEX, MAX_MOVIE_SIZE, MAX_EPISODE_SIZE, REFRESH_INTERVAL_MINUTES
+        TORRENT_FILTER_REGEX, TORRENT_FILTER_REGEX_LIST, MAX_MOVIE_SIZE, MAX_EPISODE_SIZE, REFRESH_INTERVAL_MINUTES
     )
     
     original_values = {
@@ -399,6 +399,7 @@ async def reload_environment():
         "ENABLE_AUTOMATIC_BACKGROUND_TASK": ENABLE_AUTOMATIC_BACKGROUND_TASK,
         "ENABLE_SHOW_SUBSCRIPTION_TASK": ENABLE_SHOW_SUBSCRIPTION_TASK,
         "TORRENT_FILTER_REGEX": TORRENT_FILTER_REGEX,
+        "TORRENT_FILTER_REGEX_LIST": TORRENT_FILTER_REGEX_LIST,
         "MAX_MOVIE_SIZE": MAX_MOVIE_SIZE,
         "MAX_EPISODE_SIZE": MAX_EPISODE_SIZE,
         "REFRESH_INTERVAL_MINUTES": REFRESH_INTERVAL_MINUTES
@@ -414,7 +415,7 @@ async def reload_environment():
         RD_ACCESS_TOKEN, RD_REFRESH_TOKEN, RD_CLIENT_ID, RD_CLIENT_SECRET,
         OVERSEERR_BASE, OVERSEERR_API_BASE_URL, OVERSEERR_API_KEY, TRAKT_API_KEY,
         HEADLESS_MODE, ENABLE_AUTOMATIC_BACKGROUND_TASK, ENABLE_SHOW_SUBSCRIPTION_TASK,
-        TORRENT_FILTER_REGEX, MAX_MOVIE_SIZE, MAX_EPISODE_SIZE, REFRESH_INTERVAL_MINUTES
+        TORRENT_FILTER_REGEX, TORRENT_FILTER_REGEX_LIST, MAX_MOVIE_SIZE, MAX_EPISODE_SIZE, REFRESH_INTERVAL_MINUTES
     )
     
     # Detect which values have changed
@@ -460,16 +461,18 @@ async def reload_environment():
                 )
                 settings_link.click()
                 
-                # Update filter
+                # Update filter - use first pattern from list if available, otherwise fallback to TORRENT_FILTER_REGEX
+                filter_to_use = TORRENT_FILTER_REGEX_LIST[0] if TORRENT_FILTER_REGEX_LIST and len(TORRENT_FILTER_REGEX_LIST) > 0 else TORRENT_FILTER_REGEX
                 default_filter_input = WebDriverWait(driver, 10).until(
                     EC.presence_of_element_located((By.ID, "dmm-default-torrents-filter"))
                 )
                 default_filter_input.clear()
-                default_filter_input.send_keys(TORRENT_FILTER_REGEX)
+                if filter_to_use:
+                    default_filter_input.send_keys(filter_to_use)
                 
                 # Close settings
                 settings_link.click()
-                logger.info(f"Updated torrent filter regex to: {TORRENT_FILTER_REGEX}")
+                logger.info(f"Updated torrent filter regex to: {filter_to_use}")
             except Exception as e:
                 logger.error(f"Error updating torrent filter regex: {e}")
         

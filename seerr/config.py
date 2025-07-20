@@ -30,6 +30,7 @@ HEADLESS_MODE = True
 ENABLE_AUTOMATIC_BACKGROUND_TASK = False
 ENABLE_SHOW_SUBSCRIPTION_TASK = False
 TORRENT_FILTER_REGEX = None
+TORRENT_FILTER_REGEX_LIST = None
 MAX_MOVIE_SIZE = None
 MAX_EPISODE_SIZE = None
 REFRESH_INTERVAL_MINUTES = 60.0
@@ -43,7 +44,7 @@ def load_config(override=False):
     global RD_ACCESS_TOKEN, RD_REFRESH_TOKEN, RD_CLIENT_ID, RD_CLIENT_SECRET
     global OVERSEERR_BASE, OVERSEERR_API_BASE_URL, OVERSEERR_API_KEY, TRAKT_API_KEY
     global HEADLESS_MODE, ENABLE_AUTOMATIC_BACKGROUND_TASK, ENABLE_SHOW_SUBSCRIPTION_TASK
-    global TORRENT_FILTER_REGEX, MAX_MOVIE_SIZE, MAX_EPISODE_SIZE, REFRESH_INTERVAL_MINUTES
+    global TORRENT_FILTER_REGEX, TORRENT_FILTER_REGEX_LIST, MAX_MOVIE_SIZE, MAX_EPISODE_SIZE, REFRESH_INTERVAL_MINUTES
     
     # Load environment variables
     load_dotenv(override=override)
@@ -61,6 +62,31 @@ def load_config(override=False):
     ENABLE_AUTOMATIC_BACKGROUND_TASK = os.getenv("ENABLE_AUTOMATIC_BACKGROUND_TASK", "false").lower() == "true"
     ENABLE_SHOW_SUBSCRIPTION_TASK = os.getenv("ENABLE_SHOW_SUBSCRIPTION_TASK", "false").lower() == "true"
     TORRENT_FILTER_REGEX = os.getenv("TORRENT_FILTER_REGEX")
+    
+    # Parse TORRENT_FILTER_REGEX to support both string and JSON array formats
+    try:
+        if TORRENT_FILTER_REGEX:
+            parsed_filters = json.loads(TORRENT_FILTER_REGEX)
+            if isinstance(parsed_filters, list):
+                TORRENT_FILTER_REGEX_LIST = parsed_filters
+                # Keep original variable pointing to first element for backward compatibility
+                TORRENT_FILTER_REGEX = parsed_filters[0] if parsed_filters else None
+                logger.info(f"Priority-based filtering enabled with {len(parsed_filters)} patterns")
+            else:
+                # JSON parsed but not a list, treat as single string
+                TORRENT_FILTER_REGEX_LIST = [str(parsed_filters)]
+                TORRENT_FILTER_REGEX = str(parsed_filters)
+        else:
+            # Empty or None value
+            TORRENT_FILTER_REGEX_LIST = []
+    except (json.JSONDecodeError, TypeError):
+        # Not valid JSON, treat as single string (legacy mode)
+        if TORRENT_FILTER_REGEX:
+            TORRENT_FILTER_REGEX_LIST = [TORRENT_FILTER_REGEX]
+            logger.info("Legacy filtering mode enabled with single pattern")
+        else:
+            TORRENT_FILTER_REGEX_LIST = []
+    
     MAX_MOVIE_SIZE = os.getenv("MAX_MOVIE_SIZE")
     MAX_EPISODE_SIZE = os.getenv("MAX_EPISODE_SIZE")
     

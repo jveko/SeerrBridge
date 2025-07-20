@@ -26,6 +26,7 @@ from seerr.config import (
     RD_CLIENT_SECRET, 
     RD_REFRESH_TOKEN,
     TORRENT_FILTER_REGEX,
+    TORRENT_FILTER_REGEX_LIST,
     MAX_MOVIE_SIZE,
     MAX_EPISODE_SIZE
 )
@@ -243,10 +244,13 @@ async def initialize_browser():
                     )
                     default_filter_input.clear()  # Clear any existing filter
 
-                    # Use the regex from .env
-                    default_filter_input.send_keys(TORRENT_FILTER_REGEX)
-
-                    logger.info(f"Inserted regex into 'Default torrents filter' input box: {TORRENT_FILTER_REGEX}")
+                    # Use the first pattern from TORRENT_FILTER_REGEX_LIST if available, otherwise fallback to TORRENT_FILTER_REGEX
+                    filter_to_use = TORRENT_FILTER_REGEX_LIST[0] if TORRENT_FILTER_REGEX_LIST and len(TORRENT_FILTER_REGEX_LIST) > 0 else TORRENT_FILTER_REGEX
+                    if filter_to_use:
+                        default_filter_input.send_keys(filter_to_use)
+                        logger.info(f"Inserted regex into 'Default torrents filter' input box: {filter_to_use}")
+                    else:
+                        logger.warning("No filter pattern available to set in 'Default torrents filter'")
 
                     settings_link.click()
                     logger.info("Closed 'Settings' to save settings.")

@@ -18,7 +18,8 @@ from seerr.config import (
     REFRESH_INTERVAL_MINUTES,
     ENABLE_AUTOMATIC_BACKGROUND_TASK,
     ENABLE_SHOW_SUBSCRIPTION_TASK,
-    TORRENT_FILTER_REGEX
+    TORRENT_FILTER_REGEX,
+    TORRENT_FILTER_REGEX_LIST
 )
 from seerr.browser import driver, click_show_more_results, check_red_buttons, prioritize_buttons_in_box
 from seerr.overseerr import get_overseerr_media_requests, mark_completed
@@ -628,7 +629,8 @@ async def check_show_subscriptions():
                 )
                 filter_input.clear()
                 episode_filter = f"S{season_number:02d}{episode_id}"
-                full_filter = f"{TORRENT_FILTER_REGEX} {episode_filter}"
+                base_filter = TORRENT_FILTER_REGEX_LIST[0] if TORRENT_FILTER_REGEX_LIST and len(TORRENT_FILTER_REGEX_LIST) > 0 else TORRENT_FILTER_REGEX
+                full_filter = f"{base_filter} {episode_filter}" if base_filter else episode_filter
                 filter_input.send_keys(full_filter)
                 logger.info(f"Applied filter: {full_filter}")
 
@@ -720,8 +722,10 @@ async def check_show_subscriptions():
         try:
             filter_input = browser_driver.find_element(By.ID, "query")
             filter_input.clear()
-            filter_input.send_keys(TORRENT_FILTER_REGEX)
-            logger.info(f"Reset filter to default: {TORRENT_FILTER_REGEX}")
+            reset_filter = TORRENT_FILTER_REGEX_LIST[0] if TORRENT_FILTER_REGEX_LIST and len(TORRENT_FILTER_REGEX_LIST) > 0 else TORRENT_FILTER_REGEX
+            if reset_filter:
+                filter_input.send_keys(reset_filter)
+                logger.info(f"Reset filter to default: {reset_filter}")
         except NoSuchElementException:
             logger.warning("Could not reset filter to default using ID 'query'")
 
@@ -828,111 +832,126 @@ async def search_individual_episodes(imdb_id, movie_title, season_number, season
         episode_id = f"E{episode_num:02d}"  # Format as "E01", "E02", etc.
         logger.info(f"Searching for {movie_title} Season {season_number} {episode_id}")
         
-        # Clear and update the filter box with episode-specific filter
-        try:
-            filter_input = WebDriverWait(driver, 10).until(
-                EC.presence_of_element_located((By.ID, "query"))
-            )
-            filter_input.clear()
-            episode_filter = f"S{season_number:02d}{episode_id}"  # e.g., "S01E01"
-            full_filter = f"{TORRENT_FILTER_REGEX} {episode_filter}"
-            filter_input.send_keys(full_filter)
-            logger.info(f"Applied filter: {full_filter}")
+        episode_filter = f"S{season_number:02d}{episode_id}"  # e.g., "S01E01"
+        episode_confirmed = False
+        
+        # Try each priority pattern for this episode
+        patterns_to_try = TORRENT_FILTER_REGEX_LIST if TORRENT_FILTER_REGEX_LIST else [TORRENT_FILTER_REGEX]
+        
+        for priority_index, pattern in enumerate(patterns_to_try, 1):
+            if not pattern:
+                continue
+                
+            logger.info(f"Trying priority pattern {priority_index}/{len(patterns_to_try)} for {episode_id}: {pattern}")
             
+            # Clear and update the filter box with episode-specific filter
             try:
-                click_show_more_results(driver, logger)
-            except TimeoutException:
-                logger.warning("Timed out while trying to click 'Show More Results'")
+                filter_input = WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.ID, "query"))
+                )
+                filter_input.clear()
+                full_filter = f"{pattern} {episode_filter}"
+                filter_input.send_keys(full_filter)
+                logger.info(f"Applied filter: {full_filter}")
+                
+                try:
+                    click_show_more_results(driver, logger)
+                except TimeoutException:
+                    logger.warning("Timed out while trying to click 'Show More Results'")
             except Exception as e:
                 logger.error(f"Unexpected error in click_show_more_results: {e}")
 
-            
-            # Wait for results to update after applying the filter
-            time.sleep(2)  # Adjust this delay if needed based on page response time
-            
-            # First pass: Check for existing RD (100%) using check_red_buttons
-            confirmation_flag, confirmed_seasons = check_red_buttons(
-                driver, movie_title, normalized_seasons, confirmed_seasons, is_tv_show, episode_id=episode_id
-            )
-            
-            if confirmation_flag:
-                logger.success(f"{episode_id} already cached at RD (100%). Skipping further processing.")
-                logger.info(f"{episode_id} already confirmed as cached. Moving to next episode.")
-                continue
-            
-            # Second pass: Process uncached episodes
-            try:
-                result_boxes = WebDriverWait(driver, 10).until(
-                    EC.presence_of_all_elements_located((By.XPATH, "//div[contains(@class, 'border-black')]"))
+                
+                # Wait for results to update after applying the filter
+                time.sleep(2)  # Adjust this delay if needed based on page response time
+                
+                # First pass: Check for existing RD (100%) using check_red_buttons
+                confirmation_flag, confirmed_seasons = check_red_buttons(
+                    driver, movie_title, normalized_seasons, confirmed_seasons, is_tv_show, episode_id=episode_id
                 )
-                episode_confirmed = False
                 
-                for i, result_box in enumerate(result_boxes, start=1):
-                    try:
-                        title_element = result_box.find_element(By.XPATH, ".//h2")
-                        title_text = title_element.text.strip()
-                        logger.info(f"Box {i} title (second pass): {title_text}")
-                        
-                        # Check if the title matches the episode
-                        title_clean = clean_title(title_text, 'en')
-                        movie_clean = clean_title(movie_title, 'en')
-                        match_ratio = fuzz.partial_ratio(title_clean, movie_clean)
-                        logger.info(f"Match ratio: {match_ratio} for '{title_clean}' vs '{movie_clean}'")
-                        
-                        if episode_id.lower() in title_text.lower() and match_ratio >= 50:
-                            logger.info(f"Found match for {episode_id} in box {i}: {title_text}")
+                if confirmation_flag:
+                    logger.success(f"{episode_id} already cached at RD (100%) with pattern {priority_index}. Skipping further processing.")
+                    episode_confirmed = True
+                    break  # Exit priority pattern loop for this episode
+                
+                # Second pass: Process uncached episodes
+                try:
+                    result_boxes = WebDriverWait(driver, 10).until(
+                        EC.presence_of_all_elements_located((By.XPATH, "//div[contains(@class, 'border-black')]"))
+                    )
+                    pattern_confirmed = False
+                
+                    for i, result_box in enumerate(result_boxes, start=1):
+                        try:
+                            title_element = result_box.find_element(By.XPATH, ".//h2")
+                            title_text = title_element.text.strip()
+                            logger.info(f"Box {i} title (second pass) with pattern {priority_index}: {title_text}")
                             
-                            if prioritize_buttons_in_box(result_box):
-                                logger.info(f"Successfully handled {episode_id} in box {i}")
-                                episode_confirmed = True
+                            # Check if the title matches the episode
+                            title_clean = clean_title(title_text, 'en')
+                            movie_clean = clean_title(movie_title, 'en')
+                            match_ratio = fuzz.partial_ratio(title_clean, movie_clean)
+                            logger.info(f"Match ratio: {match_ratio} for '{title_clean}' vs '{movie_clean}'")
+                            
+                            if episode_id.lower() in title_text.lower() and match_ratio >= 50:
+                                logger.info(f"Found match for {episode_id} in box {i} with pattern {priority_index}: {title_text}")
                                 
-                                # Verify RD status after clicking
-                                try:
-                                    rd_button = WebDriverWait(driver, 10).until(
-                                        EC.presence_of_element_located((By.XPATH, ".//button[contains(text(), 'RD (')]"))
-                                    )
-                                    rd_button_text = rd_button.text
-                                    if "RD (100%)" in rd_button_text:
-                                        logger.success(f"RD (100%) confirmed for {episode_id}. Episode fully processed.")
-                                        episode_confirmed = True
-                                        break  # Exit the loop once RD (100%) is confirmed
-                                    elif "RD (0%)" in rd_button_text:
-                                        logger.warning(f"RD (0%) detected for {episode_id}. Undoing and skipping.")
-                                        rd_button.click()  # Undo the click
-                                        episode_confirmed = False
+                                if prioritize_buttons_in_box(result_box):
+                                    logger.info(f"Successfully handled {episode_id} in box {i} with pattern {priority_index}")
+                                    pattern_confirmed = True
+                                    
+                                    # Verify RD status after clicking
+                                    try:
+                                        rd_button = WebDriverWait(driver, 10).until(
+                                            EC.presence_of_element_located((By.XPATH, ".//button[contains(text(), 'RD (')]"))
+                                        )
+                                        rd_button_text = rd_button.text
+                                        if "RD (100%)" in rd_button_text:
+                                            logger.success(f"RD (100%) confirmed for {episode_id} with pattern {priority_index}. Episode fully processed.")
+                                            episode_confirmed = True
+                                            break  # Exit the result box loop
+                                        elif "RD (0%)" in rd_button_text:
+                                            logger.warning(f"RD (0%) detected for {episode_id} with pattern {priority_index}. Undoing and skipping.")
+                                            rd_button.click()  # Undo the click
+                                            pattern_confirmed = False
+                                            continue
+                                    except TimeoutException:
+                                        logger.warning(f"Timeout waiting for RD status for {episode_id} with pattern {priority_index}")
                                         continue
-                                except TimeoutException:
-                                    logger.warning(f"Timeout waiting for RD status for {episode_id}")
-                                    continue
-                            else:
-                                logger.warning(f"Failed to handle buttons for {episode_id} in box {i}")
+                                else:
+                                    logger.warning(f"Failed to handle buttons for {episode_id} in box {i} with pattern {priority_index}")
+                        
+                        except NoSuchElementException:
+                            logger.warning(f"No title found in box {i} for {episode_id} with pattern {priority_index}")
                     
-                    except NoSuchElementException:
-                        logger.warning(f"No title found in box {i} for {episode_id}")
-                
-                if not episode_confirmed:
-                    logger.error(f"Failed to confirm {episode_id} for {movie_title} Season {season_number}")
-                    failed_episodes.append(episode_id)
-                    all_confirmed = False
-                else:
-                    logger.info(f"{episode_id} confirmed and processed. Moving to next episode.")
-                
+                    if pattern_confirmed:
+                        logger.success(f"{episode_id} confirmed with priority pattern {priority_index}: {pattern}")
+                        episode_confirmed = True
+                        break  # Exit the priority pattern loop for this episode
+                        
+                except TimeoutException:
+                    logger.warning(f"No result boxes found for {episode_id} with pattern {priority_index}")
+                    
             except TimeoutException:
-                logger.warning(f"No result boxes found for {episode_id}")
-                failed_episodes.append(episode_id)
-                all_confirmed = False
+                logger.error(f"Filter input with ID 'query' not found for {episode_id} with pattern {priority_index}")
         
-        except TimeoutException:
-            logger.error(f"Filter input with ID 'query' not found for {episode_id}")
+        # After trying all patterns for this episode
+        if not episode_confirmed:
+            logger.error(f"Failed to confirm {episode_id} for {movie_title} Season {season_number} with any priority pattern")
             failed_episodes.append(episode_id)
             all_confirmed = False
+        else:
+            logger.info(f"{episode_id} confirmed and processed. Moving to next episode.")
     
     # Reset the filter to the default after processing
     try:
         filter_input = browser_driver.find_element(By.ID, "query")
         filter_input.clear()
-        filter_input.send_keys(TORRENT_FILTER_REGEX)
-        logger.info(f"Reset filter to default: {TORRENT_FILTER_REGEX}")
+        reset_filter = TORRENT_FILTER_REGEX_LIST[0] if TORRENT_FILTER_REGEX_LIST and len(TORRENT_FILTER_REGEX_LIST) > 0 else TORRENT_FILTER_REGEX
+        if reset_filter:
+            filter_input.send_keys(reset_filter)
+            logger.info(f"Reset filter to default: {reset_filter}")
     except NoSuchElementException:
         logger.warning("Could not reset filter to default using ID 'query'")
     
