@@ -22,6 +22,16 @@ import {
   ClockIcon
 } from "lucide-react";
 import RegexBuilder from "./regex-builder";
+import RegexPriorityEditor from "./regex-priority-editor";
+import { 
+  detectRegexFormat, 
+  parseRegexValue, 
+  stringToRegexArray, 
+  regexArrayToString, 
+  getDefaultRegexPatterns,
+  getMatchingPresetName,
+  type RegexFormat 
+} from "../lib/env-utils";
 
 // Available options for specific environment variables
 const BOOLEAN_OPTIONS = [
@@ -101,6 +111,8 @@ export function EnvConfig() {
     description?: string;
   }>({ name: '', pattern: '' });
   const [timeUntilRefresh, setTimeUntilRefresh] = useState(30);
+  const [regexFormat, setRegexFormat] = useState<RegexFormat>('empty');
+  const [regexArray, setRegexArray] = useState<string[]>([]);
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Function to set dropdown refs
@@ -120,6 +132,20 @@ export function EnvConfig() {
         const data = await response.json();
         setEnvVars(data);
         setError(null);
+        
+        // Parse TORRENT_FILTER_REGEX format and set states
+        const regexValue = data.TORRENT_FILTER_REGEX;
+        const parsedRegex = parseRegexValue(regexValue);
+        setRegexFormat(parsedRegex.format);
+        
+        if (parsedRegex.format === 'empty') {
+          // Default to array format with suggested patterns for new installations
+          const defaultPatterns = getDefaultRegexPatterns();
+          setRegexArray(defaultPatterns);
+          setRegexFormat('array');
+        } else {
+          setRegexArray(parsedRegex.array);
+        }
         
         // Initialize validation for OVERSEERR_BASE if it exists
         if (data.OVERSEERR_BASE) {
@@ -144,6 +170,13 @@ export function EnvConfig() {
         // Only update if data has actually changed to minimize re-renders
         setEnvVars(prev => {
           const hasChanges = JSON.stringify(prev) !== JSON.stringify(data);
+          if (hasChanges) {
+            // Parse TORRENT_FILTER_REGEX format when data changes
+            const regexValue = data.TORRENT_FILTER_REGEX;
+            const parsedRegex = parseRegexValue(regexValue);
+            setRegexFormat(parsedRegex.format);
+            setRegexArray(parsedRegex.array);
+          }
           return hasChanges ? data : prev;
         });
         
@@ -307,7 +340,13 @@ export function EnvConfig() {
 
   // Apply a preset to the TORRENT_FILTER_REGEX field
   const applyRegexPreset = (pattern: string) => {
-    handleInputChange('TORRENT_FILTER_REGEX', pattern);
+    if (regexFormat === 'array') {
+      // For array format, replace with single pattern
+      setRegexArray([pattern]);
+    } else {
+      // For string format, use existing logic
+      handleInputChange('TORRENT_FILTER_REGEX', pattern);
+    }
   };
 
   // Validate OVERSEERR_BASE connection
@@ -433,12 +472,21 @@ export function EnvConfig() {
       setSuccess(null);
       setError(null);
       
+      // Prepare the data to send, handling TORRENT_FILTER_REGEX format
+      const dataToSend = { ...envVars };
+      
+      if (regexFormat === 'array') {
+        // Convert regex array to appropriate string format
+        dataToSend.TORRENT_FILTER_REGEX = regexArrayToString(regexArray);
+      }
+      // For string format, use the value as-is from envVars
+      
       const response = await fetch("/api/env", {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify(envVars)
+        body: JSON.stringify(dataToSend)
       });
       
       if (!response.ok) {
@@ -548,13 +596,25 @@ export function EnvConfig() {
 
   // Find current preset name if pattern matches
   const getCurrentPresetName = (): string | null => {
-    if (!envVars.TORRENT_FILTER_REGEX) return null;
-    
-    const matchingPreset = regexPresets.find(
-      preset => preset.pattern === envVars.TORRENT_FILTER_REGEX
-    );
-    
-    return matchingPreset ? matchingPreset.name : null;
+    if (regexFormat === 'array') {
+      // For array format, check if single pattern matches a preset
+      if (regexArray.length === 1) {
+        const matchingPreset = regexPresets.find(
+          preset => preset.pattern === regexArray[0]
+        );
+        return matchingPreset ? matchingPreset.name : null;
+      }
+      return null;
+    } else {
+      // For string format, use existing logic
+      if (!envVars.TORRENT_FILTER_REGEX) return null;
+      
+      const matchingPreset = regexPresets.find(
+        preset => preset.pattern === envVars.TORRENT_FILTER_REGEX
+      );
+      
+      return matchingPreset ? matchingPreset.name : null;
+    }
   };
 
   return (
@@ -661,13 +721,35 @@ export function EnvConfig() {
                       ) : (
                         <>
                           <div className="flex">
-                            <input
-                              type={isSensitive && !isVisible ? "password" : "text"}
-                              id={key}
-                              value={value}
-                              onChange={(e) => handleInputChange(key, e.target.value)}
-                              className={`glass-input w-full px-3 py-2 rounded-md focus:outline-none focus:border-primary/50 focus:shadow-[0_0_10px_rgba(139,92,246,0.3)] transition-all ${isOverseerrBase ? 'rounded-r-none' : (isSensitive ? 'pr-10' : '')}`}
-                            />
+                            {isRegexFilter && regexFormat === 'array' ? (
+                              <div className="glass-input w-full px-3 py-2 rounded-md bg-background/30 border-dashed border-primary/30">
+                                <div className="text-sm text-gray-400 mb-1">
+                                  Priority-based patterns ({regexArray.length} pattern{regexArray.length !== 1 ? 's' : ''})
+                                </div>
+                                <div className="text-xs font-mono text-gray-300">
+                                  {regexArray.length > 0 ? (
+                                    regexArray.slice(0, 2).map((pattern, idx) => (
+                                      <div key={idx} className="truncate">
+                                        {idx + 1}. {pattern}
+                                      </div>
+                                    ))
+                                  ) : (
+                                    <div className="text-gray-500 italic">No patterns configured</div>
+                                  )}
+                                  {regexArray.length > 2 && (
+                                    <div className="text-gray-500">... and {regexArray.length - 2} more</div>
+                                  )}
+                                </div>
+                              </div>
+                            ) : (
+                              <input
+                                type={isSensitive && !isVisible ? "password" : "text"}
+                                id={key}
+                                value={value}
+                                onChange={(e) => handleInputChange(key, e.target.value)}
+                                className={`glass-input w-full px-3 py-2 rounded-md focus:outline-none focus:border-primary/50 focus:shadow-[0_0_10px_rgba(139,92,246,0.3)] transition-all ${isOverseerrBase ? 'rounded-r-none' : (isSensitive ? 'pr-10' : '')}`}
+                              />
+                            )}
                             {isOverseerrBase && (
                               <button
                                 type="button"
@@ -738,6 +820,40 @@ export function EnvConfig() {
 
                           {isRegexFilter && (
                             <div className="mt-3 space-y-3">
+                              {regexFormat === 'array' ? (
+                                <RegexPriorityEditor
+                                  patterns={regexArray}
+                                  onPatternsChange={setRegexArray}
+                                  presets={regexPresets.reduce((acc, preset) => {
+                                    acc[preset.name] = preset.pattern;
+                                    return acc;
+                                  }, {} as { [key: string]: string })}
+                                  onApplyPreset={(pattern) => setRegexArray([pattern])}
+                                  isLoading={saving}
+                                />
+                              ) : (
+                                <>
+                                  {/* String format with convert option */}
+                                  <div className="flex items-center justify-between">
+                                    <p className="text-xs text-muted-foreground">
+                                      Single Pattern Mode
+                                    </p>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const currentValue = envVars.TORRENT_FILTER_REGEX || '';
+                                        const newArray = stringToRegexArray(currentValue);
+                                        setRegexArray(newArray);
+                                        setRegexFormat('array');
+                                      }}
+                                      className="text-xs px-2 py-1 rounded-md bg-blue-600/10 text-blue-400 hover:bg-blue-600/20 transition-colors"
+                                    >
+                                      Convert to Priority List
+                                    </button>
+                                  </div>
+                                </>
+                              )}
+
                               <div className="flex items-center justify-between">
                                 <p className="text-xs text-muted-foreground flex items-center">
                                   <TagIcon size={14} className="mr-1" />
@@ -849,12 +965,14 @@ export function EnvConfig() {
                                 </div>
                               )}
                               
-                              {/* Regex Builder Component */}
-                              <RegexBuilder
-                                onSavePattern={handleSaveBuilderPreset}
-                                onApplyPattern={applyRegexPreset}
-                                isLoading={loadingPresets}
-                              />
+                              {/* Regex Builder Component - only show in string mode */}
+                              {regexFormat === 'string' && (
+                                <RegexBuilder
+                                  onSavePattern={handleSaveBuilderPreset}
+                                  onApplyPattern={applyRegexPreset}
+                                  isLoading={loadingPresets}
+                                />
+                              )}
                             </div>
                           )}
                         </>
